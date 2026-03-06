@@ -1,0 +1,241 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Monad
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Monad typeclass.
+--
+-----------------------------------------------------------------------------
+module Control.Monad
+  ( class Applicative, pure, apply, (<*>)
+    -- ^ Applicative
+  , class Alternative, empty, append, (<|>)
+  , liftA1, liftA2, liftA3, liftA4
+    -- ^ liftA
+  , class Monad, bind, bind', (>>=), (=<<)
+    -- ^ Monad
+  , kCompose, kCompose', (>=>), (<=<)
+  , class MonadPlus, mplus, mzero
+  , ap
+  , liftM1, liftM2, liftM3, liftM4
+    -- ^ liftM
+  , IO
+  , discard
+  , guardF
+  , guard
+  , msum
+  , mfilter
+  , seqio
+  , seqio_
+  , void
+  , when
+  , unless
+  , join
+  , filterM
+  , foldM
+  , module Data.Functor
+  , unsafePerformIO
+  , replApply
+  ) where
+
+import Data.Functor (class Functor, map, (<$>))
+import Data.Unit (Unit, unit)
+
+-----------------------------------------------------------------------------
+-- | Applicative typeclass
+-----------------------------------------------------------------------------
+
+class Functor f => Applicative f where
+  pure  :: forall a. a -> f a
+  apply :: forall a b. f (a -> b) -> f a -> f b
+
+class Applicative f => Alternative f where
+  empty  :: forall a. f a
+  append :: forall a. f a -> f a -> f a
+
+infixl 4 apply as <*>
+infixl 3 append as <|>
+
+instance Applicative List where
+  pure x = [x]
+  apply = applyListImpl
+
+foreign import applyListImpl
+  :: forall a b. List (a -> b) -> List a -> List b
+
+instance Alternative List where
+  empty  = []
+  append = listAppend
+
+foreign import listAppend :: forall a. [a] -> [a] -> [a]
+
+-----------------------------------------------------------------------------
+-- | Lift a function.
+-----------------------------------------------------------------------------
+
+liftA1 :: forall a b f. Applicative f => (a -> b) -> f a -> f b
+liftA1 f a = pure f <*> a
+
+liftA2 :: forall a b c f. Applicative f => (a -> b -> c) -> f a -> f b -> f c
+liftA2 f a b = pure f <*> a <*> b
+
+liftA3 :: forall a b c d f. Applicative f => (a -> b -> c -> d) -> f a -> f b -> f c -> f d
+liftA3 f a b c = pure f <*> a <*> b <*> c
+
+liftA4 :: forall a b c d e f. Applicative f => (a -> b -> c -> d -> e) -> f a -> f b -> f c -> f d -> f e
+liftA4 f a b c d = pure f <*> a <*> b <*> c <*> d
+
+-----------------------------------------------------------------------------
+-- | Monad typeclass
+-----------------------------------------------------------------------------
+
+class Applicative m => Monad m where
+  bind :: forall a b. m a -> (a -> m b) -> m b
+
+bind' :: forall m a b. Monad m => (a -> m b) -> m a -> m b
+bind' f m = bind m f
+
+class Monad m => MonadPlus m where
+  mzero :: forall a. m a
+  mplus :: forall a. m a -> m a -> m a
+
+instance MonadPlus List where
+  mzero = []
+  mplus = listAppend
+
+guard :: forall m. MonadPlus m => Boolean -> m ()
+guard true  = pure ()
+guard false = mzero
+
+msum :: forall m a. MonadPlus m => [m a] -> m a
+msum [] = mzero
+msum [x|xs] = mplus x (msum xs)
+
+mfilter :: forall m a. MonadPlus m => (a -> Boolean) -> m a -> m a
+mfilter f ma = do
+  a <- ma
+  if f a then pure a else mzero
+
+infixl 1 bind  as >>=
+infixr 1 bind' as =<<
+
+kCompose  :: forall m a b c. Monad m => (a -> m b) -> (b -> m c) -> (a -> m c)
+kCompose  f1 f2 = \x -> do
+  r <- f1 x
+  f2 r
+
+kCompose' :: forall m a b c. Monad m => (b -> m c) -> (a -> m b) -> (a -> m c)
+kCompose' f2 f1 = kCompose f1 f2
+
+infixr 1 kCompose  as >=>
+infixr 1 kCompose' as <=<
+
+instance Monad List where
+  bind a f = bindListImpl a f
+
+foreign import bindListImpl :: forall a b. [a] -> (a -> [b]) -> [b]
+
+foreign import data IO :: Type -> Type
+
+instance Functor IO where
+  map f a = apply (pure f) a
+
+instance Applicative IO where
+  apply f a = do
+    f' <- f
+    a' <- a
+    pure (f' a')
+  pure = pureImpl
+
+instance Monad IO where
+  bind = bindImpl
+
+foreign import bindImpl :: forall a b. IO a -> (a -> IO b) -> IO b
+foreign import pureImpl :: forall a. a -> IO a
+
+-----------------------------------------------------------------------------
+-- | Lift a function to a monad
+-----------------------------------------------------------------------------
+
+ap :: forall a b m. Monad m => m (a -> b) -> m a -> m b
+ap mf ma = do
+  f <- mf
+  a <- ma
+  pure (f a)
+
+liftM1 :: forall a b m. Monad m => (a -> b) -> m a -> m b
+liftM1 f ma = do
+  a <- ma
+  pure (f a)
+
+liftM2 :: forall a b c m. Monad m => (a -> b -> c) -> m a -> m b -> m c
+liftM2 f ma mb = do
+  a <- ma
+  b <- mb
+  pure (f a b)
+
+liftM3 :: forall a b c d m. Monad m => (a -> b -> c -> d) -> m a -> m b -> m c -> m d
+liftM3 f ma mb mc = do
+  a <- ma
+  b <- mb
+  c <- mc
+  pure (f a b c)
+
+liftM4 :: forall a b c d e m. Monad m => (a -> b -> c -> d -> e) -> m a -> m b -> m c -> m d -> m e
+liftM4 f ma mb mc md = do
+  a <- ma
+  b <- mb
+  c <- mc
+  d <- md
+  pure (f a b c d)
+
+-- TODO:...
+discard :: forall f a b. Monad f => f a -> (a -> f b) -> f b
+discard = bind
+
+guardF :: Boolean  -> [Boolean]
+guardF true = [true]
+guardF false = []
+
+foreign import seqio :: forall a. [IO a] -> IO [a]
+
+foreign import seqio_ ::forall a. [IO a] -> IO ()
+
+foreign import unsafePerformIO :: forall a. IO a -> a
+
+foreign import replApply :: forall a. a -> a
+
+void :: forall a m. Monad m => m a -> m ()
+void f = f >>= \_ -> pure ()
+
+when :: forall m. Monad m => Boolean -> m () -> m ()
+when b m = if b then m else pure ()
+
+unless :: forall m. Monad m => Boolean -> m () -> m ()
+unless b m = if b then pure () else m
+
+join :: forall m a. Monad m => m (m a) -> m a
+join mma = do
+  ma <- mma
+  ma
+
+filterM :: forall m a. Monad m => (a -> m Boolean) -> [a] -> m [a]
+filterM f [] = pure []
+filterM f [x|xs] = do
+  b <- f x
+  ys <- filterM f xs
+  pure (if b then [x|ys] else ys)
+
+foldM :: forall m a b. Monad m => (a -> b -> m a) -> a -> [b] -> m a
+foldM _ i [] = pure i
+foldM f i [x|xs] = do
+  r <- f i x
+  foldM f r xs
+
+

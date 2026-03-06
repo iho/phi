@@ -1,0 +1,62 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.GenServer.Types
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The GenServer Types.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.GenServer.Types
+  ( Action(..)
+  , InitResult(..)
+  , Reply(..)
+  , Replies
+  , ServerRef(..)
+  , module Control.Behaviour.GenTypes
+  ) where
+
+import Control.Behaviour.GenTypes
+import Control.Distributed.Node (Node)
+import Control.Process (ExitReason)
+import Data.Maybe (Maybe)
+import Data.Pid (Pid)
+
+data Action req
+  = Continue req
+  | Hibernate
+  | Timeout Integer
+
+-- | Init Result
+data InitResult req st
+  = InitOk st (Maybe (Action req))
+    -- ^ {ok, State}
+  | InitIgnore
+    -- ^ ignore
+  | InitStop ExitReason
+    -- ^ {stop, Reason}
+
+-- | Server Reply
+data Reply req rep st
+  = Reply rep st (Maybe (Action req))
+  | NoReply st (Maybe (Action req))
+  | Shutdown ExitReason st
+
+-- | Replies
+type Replies rep = [(Node, Maybe rep)]
+
+-- | Server Ref.
+data ServerRef
+  = ServerPid Pid
+    -- ^ The Pid of GenServer.
+  | ServerRef Name
+    -- ^ The GenServer is locally registered.
+  | ServerRefAt Name Node
+    -- ^ The GenServer is locally registered at another node.
+  | ServerRefGlobal Name
+    -- ^ The GenServer is globally registered in global.

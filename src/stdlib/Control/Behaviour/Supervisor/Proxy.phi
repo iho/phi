@@ -1,0 +1,27 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.Supervisor.Proxy
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Supervisor Behaviour Proxy.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.Supervisor.Proxy where
+
+import Control.Monad (IO)
+import Control.Process (Process)
+import Data.Pid (Pid)
+import Data.Unit (Unit)
+
+-- | Module:init(Args) -> Result
+foreign import init :: forall a res. a -> Process res
+
+foreign import apply :: IO () -> Process Pid
+
+foreign import translate :: forall a b. a -> b

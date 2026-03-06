@@ -1,0 +1,8 @@
+
+module Main (main) where
+
+import Prelude
+
+main :: IO ()
+main = print (identity "Hello from direct BEAM compiler (nested call!)")
+

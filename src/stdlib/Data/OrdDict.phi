@@ -1,0 +1,124 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.OrdDict
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+--                Rory Z, rory@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Ordered Dictionary datatype.
+--
+-----------------------------------------------------------------------------
+module Data.OrdDict where
+
+import Data.Maybe (Maybe)
+import Foreign (ffi0, ffi1, ffi2, ffi3, ffi4)
+import Test.QuickCheck (arbitrary, class Arbitrary)
+import Control.Monad ((<$>), liftA1)
+
+import Data.Show (class Show, show)
+import Data.Read (class Read, read)
+import Data.Eq (class Eq, eq)
+import Data.Ord (class Ord, compare)
+import Data.Semigroup (class Semigroup, (<>))
+import Data.Monoid (class Monoid, mempty)
+import Data.Functor (class Functor, map)
+import Data.Foldable (class Foldable, foldl, foldr)
+import Data.Traversable (class Traversable, sequence)
+
+foreign import data OrdDict :: Type -> Type -> Type
+
+instance (Show a, Show b) => Show (OrdDict a b) where
+  show x = show (toList x)
+
+instance (Read a, Read b) => Read (OrdDict a b) where
+  read x = fromList (read x)
+
+instance (Eq a, Eq b) => Eq (OrdDict a b) where
+  eq x y = eq (toList x) (toList y)
+
+instance (Ord a, Ord b) => Ord (OrdDict a b) where
+  compare x y = compare (toList x) (toList y)
+  
+instance (Arbitrary k, Arbitrary v) => Arbitrary (OrdDict k v) where
+  arbitrary = fromList <$> arbitrary
+
+instance Semigroup (OrdDict a b) where
+  append = merge \_ x _ -> x
+
+instance Monoid (OrdDict a b) where
+  mempty = new
+
+instance Functor (OrdDict k) where
+  map f x = fromList (map (\(k, v) -> (k, f v)) (toList x))
+
+instance Foldable (OrdDict k) where
+  foldl f init x = foldl (\acc (k, v) -> f acc v) init (toList x)
+  foldr f init x = foldr (\(k, v) acc -> f v acc) init (toList x)
+  foldMap f =  foldr (\x acc -> f x <> acc) mempty
+
+instance Traversable (OrdDict k) where
+  traverse f ta = sequence (f <$> ta)
+  sequence x = liftA1 fromList (sequence (map lifting (toList x)))
+    where lifting (k, v) = liftA1 (\a -> (k, a)) v
+
+new :: forall a b. OrdDict a b
+new = ffi0 :orddict :new
+
+append :: forall a b. a -> b -> OrdDict a [b] -> OrdDict a [b]
+append = ffi3 :orddict :append
+
+appendList :: forall a b. a -> [b] -> OrdDict a [b] -> OrdDict a [b]
+appendList = ffi3 :orddict :append_list
+
+erase :: forall a b. a -> OrdDict a b -> OrdDict a b
+erase = ffi2 :orddict :erase
+
+fetch :: forall a b. a -> OrdDict a b -> a
+fetch = ffi2 :orddict :fetch
+
+fetchKeys :: forall a b. OrdDict a b -> [a]
+fetchKeys  = ffi1 :orddict :fetch_keys
+
+foreign import filter :: forall a b. (a -> b -> Boolean) -> OrdDict a b -> OrdDict a b
+
+foreign import find :: forall a b. a -> OrdDict a b -> Maybe b
+
+foreign import fold :: forall a b acc. (a -> b -> acc -> acc)  -> acc -> OrdDict a b -> acc
+
+fromList :: forall a b. [(a,b)] -> OrdDict a b
+fromList = ffi1 :orddict :from_list
+
+isEmpty :: forall a b. a -> OrdDict a b -> Boolean
+isEmpty = ffi1 :orddict :is_empty
+
+isKey :: forall a b. a -> OrdDict a b -> Boolean
+isKey = ffi2 :orddict :is_key
+
+foreign import mapWithKey :: forall a b. (a -> b -> b) -> OrdDict a b -> OrdDict a b
+
+foreign import merge :: forall a b. (a -> b -> b -> b) -> OrdDict a b -> OrdDict a b -> OrdDict a b
+
+size :: forall a b. OrdDict a b -> Integer
+size = ffi1 :orddict :size
+
+store :: forall a b. a -> b -> OrdDict a b -> OrdDict a b
+store = ffi3 :orddict :store
+
+foreign import take :: forall a b. a -> OrdDict a b -> Maybe (b, (OrdDict a b))
+
+toList :: forall a b. OrdDict a b -> [(a, b)]
+toList = ffi1 :orddict :to_list
+
+updateCounter :: forall a b increment. a -> increment -> OrdDict a b -> OrdDict a b
+updateCounter = ffi3 :orddict :update_counter
+
+update :: forall a b. a -> (b -> b) -> OrdDict a b -> OrdDict a b
+update = ffi3 :orddict :update
+
+updateByInitial :: forall a b initial. a -> (b -> b) -> initial -> OrdDict a b -> OrdDict a b
+updateByInitial = ffi4 :orddict :update

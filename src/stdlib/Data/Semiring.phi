@@ -1,0 +1,41 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Semiring
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Semiring typeclass.
+--
+-----------------------------------------------------------------------------
+module Data.Semiring where
+
+class Semiring a where
+  add  :: a -> a -> a
+  zero :: a
+  mul  :: a -> a -> a
+  one  :: a
+
+infixl 6 add as +
+infixl 7 mul as *
+
+instance Semiring Integer where
+  add = addInt
+  zero = 0
+  mul = mulInt
+  one = 1
+
+instance Semiring Float where
+  add = addFloat
+  zero = 0.0
+  mul = mulFloat
+  one = 1.0
+
+foreign import addInt :: Integer -> Integer -> Integer
+foreign import mulInt :: Integer -> Integer -> Integer
+foreign import addFloat :: Float -> Float -> Float
+foreign import mulFloat :: Float -> Float -> Float

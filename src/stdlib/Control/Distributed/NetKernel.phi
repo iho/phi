@@ -1,0 +1,43 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Distributed.NetKernel
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Distributed Networking Kernel module.
+--
+-----------------------------------------------------------------------------
+module Control.Distributed.NetKernel where
+
+import Control.Monad (IO)
+import Control.Process (Process)
+import Control.Distributed.Node (Node, NodeType)
+import Data.Pid (Pid)
+import Data.Unit (Unit)
+import Foreign (ffiIO0, ffiIO1)
+
+data NameType = ShortName | LongName
+
+type Ticktime = Integer
+
+allow :: [Node] -> IO ()
+allow = ffiIO1 :net_kernel :allow
+
+foreign import connectNode :: Node -> IO Boolean
+foreign import getTicktime :: IO Ticktime
+foreign import monitorNodes :: Boolean -> IO ()
+foreign import monitorNodesOf :: Boolean -> NodeType -> IO ()
+foreign import setTicktime :: Ticktime -> IO ()
+foreign import start :: Node -> Process Pid
+foreign import startWithType :: Node -> NameType -> Process Pid
+foreign import startWithTicktime :: Node -> NameType -> Ticktime -> Process Pid
+
+stop :: IO ()
+stop = ffiIO0 :net_kernel :stop
+
+{- net_kernel: getopts/2, set_net_ticktime/2, setopts/2 -}

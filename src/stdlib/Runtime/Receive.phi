@@ -1,0 +1,3 @@
+module Runtime.Receive (receiveWith) where
+
+foreign import receiveWith :: forall a b. (a -> b) -> Integer -> (() -> b) -> b

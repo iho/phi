@@ -1,0 +1,40 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Int
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Integer dataType.
+--
+-----------------------------------------------------------------------------
+module Data.Int where
+
+import Foreign (ffi1)
+
+-- | An alias for `Integer`
+type Int = Integer
+
+-- | newtype ???
+type Int8  = Integer
+type Int16 = Integer
+type Int32 = Integer
+type Int64 = Integer
+
+-- | newtype ???
+type UInt8  = Integer
+type UInt16 = Integer
+type UInt32 = Integer
+type UInt64 = Integer
+
+toBinary :: Integer -> Binary
+toBinary = ffi1 :erlang :integer_to_binary
+
+toString :: Integer -> String
+toString = ffi1 :erlang :integer_to_list
+
+foreign import toFloat :: Integer -> Float

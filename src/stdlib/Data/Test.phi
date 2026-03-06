@@ -1,0 +1,2 @@
+module Data.Test where
+test x = x

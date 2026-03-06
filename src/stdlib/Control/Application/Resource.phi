@@ -1,0 +1,21 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Application.Resource
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Application Resource module.
+--
+-----------------------------------------------------------------------------
+module Control.Application.Resource where
+
+import Control.Application.Types
+import Control.Monad (IO)
+
+-- | See: http://erlang.org/doc/man/app.html
+foreign import getAppSpec :: Application -> IO AppSpec

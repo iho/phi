@@ -1,0 +1,25 @@
+module TestApp where
+
+-- Standard binary function for testing
+double :: Int -> Int
+double n = n + n
+
+-- Higher order call
+quadruple :: Int -> Int
+quadruple n = double (double n)
+
+-- Multi-argument function
+helper :: Int -> Int -> Int
+helper a b = a + b
+
+-- Application with local call
+callHelper :: Int -> Int
+callHelper n = helper n n
+
+-- Higher-order: apply a function to a value
+applyFn :: (Int -> Int) -> Int -> Int
+applyFn f x = f x
+
+-- Compose: uses applyFn to chain calls
+tripleViaApply :: Int -> Int
+tripleViaApply n = applyFn double n

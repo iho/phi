@@ -1,0 +1,4 @@
+module TestSimple where
+
+simpleAdd :: Int -> Int -> Int
+simpleAdd x y = x + y

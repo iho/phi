@@ -1,0 +1,9 @@
+module TestLambda where
+
+-- Simple closure
+makeAdder :: Int -> (Int -> Int)
+makeAdder x = \y -> x
+
+-- Test function
+testAdd :: Int -> Int -> Int
+testAdd x y = (makeAdder x) y

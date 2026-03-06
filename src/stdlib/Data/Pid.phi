@@ -1,0 +1,46 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Pid
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Erlang Pid datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Pid (Pid) where
+
+import Data.Eq (class Eq)
+import Data.Ord
+  ( class Ord
+  , Ordering(..)
+  )
+import Data.Show (class Show)
+
+-- | Erlang process identifier.
+foreign import data Pid :: Type
+
+instance Eq Pid where
+  eq = eqPidImpl
+
+instance Ord Pid where
+  compare = cmpPidImpl LT EQ GT
+
+instance Show Pid where
+  show = showPidImpl
+
+foreign import eqPidImpl :: Pid -> Pid -> Boolean
+
+foreign import cmpPidImpl
+  :: Ordering
+  -> Ordering
+  -> Ordering
+  -> Pid
+  -> Pid
+  -> Ordering
+
+foreign import showPidImpl :: Pid -> String

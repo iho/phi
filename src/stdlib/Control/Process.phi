@@ -1,0 +1,185 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Process
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Process module.
+--
+-----------------------------------------------------------------------------
+module Control.Process
+  ( getSelf
+  , isAlive
+    -- * Message passing
+  , send, (!)
+  , sendNosuspend
+    -- * Linking and Monitoring
+  , link
+  , unlink
+  , monitor
+  , demonitor
+  , demonitorFlush
+    -- * Registeration
+  , register
+  , unregister
+  , registered
+  , whereis
+    -- * Group Leader
+  , groupLeader
+  , setGroupLeader
+    -- * Termination
+  , exit
+  , exitProc
+  , killProc
+    -- * Scheduling
+  , resume
+  , suspend
+  , yield
+  , timerSleep
+    -- * Process Dict
+  , module Control.Process.Dict
+    -- * Process Flags
+  , module Control.Process.Flags
+    -- * Process GC
+  , module Control.Process.GC
+    -- * Process Infos
+  , module Control.Process.Infos
+    -- * Spawn Process
+  , module Control.Process.Spawn
+  , module Control.Process.Types
+  ) where
+
+import Control.Monad (IO)
+import Control.Process.Dict
+  ( erase
+  , eraseAll
+  , get
+  , put
+  )
+import Control.Process.Flags
+  ( Flag(..)
+  , MsgQueueData(..)
+  , PriorityLevel(..)
+  , processFlag
+  , trapExit
+  )
+import Control.Process.GC
+  ( GcOption(..)
+  , garbageCollect
+  , garbageCollectProc
+  , garbageCollectProcWith
+  , hibernate
+  )
+import Control.Process.Infos
+  ( ProcessInfo
+  , processInfo
+  , processMsgs
+  )
+import Control.Process.Spawn
+  ( Option
+  , spawn
+  , spawnAt
+  , spawnWith
+  , spawnAtWith
+  , spawnLink
+  , spawnLinkAt
+  , spawnLinkWith
+  , spawnLinkAtWith
+  , spawnMonitor
+  , spawnMonitorAt
+  , spawnMonitorWith
+  , spawnMonitorAtWith
+  )
+import Control.Process.Types
+import Data.Maybe (Maybe)
+import Data.Pid (Pid)
+import Data.Ref (Reference)
+import Data.Unit (Unit)
+import Foreign (ffiIO0, ffiIO1, ffiIO2)
+
+-- Return the Pid of the calling process.
+getSelf :: Process Pid
+getSelf = ffiIO0 :erlang :self
+
+-- | Is the process alive?
+isAlive :: Pid -> Process Boolean
+isAlive = ffiIO1 :erlang :is_process_alive
+
+-----------------------------------------------------------------------------
+-- | Message passing
+-----------------------------------------------------------------------------
+
+infixr 1 send as !
+
+-- Send a message to a Process.
+foreign import send :: forall a. Pid -> a -> Process ()
+
+sendNosuspend :: forall a. Pid -> a -> Process Boolean
+sendNosuspend = ffiIO2 :erlang :send_nosuspend
+
+-----------------------------------------------------------------------------
+-- | Linking and Monitoring
+-----------------------------------------------------------------------------
+
+foreign import link :: Pid -> Process ()
+
+foreign import unlink :: Pid -> Process ()
+
+foreign import monitor :: Pid -> Process Reference
+
+foreign import demonitor :: Reference -> IO ()
+
+foreign import demonitorFlush :: Reference -> Process ()
+
+-----------------------------------------------------------------------------
+-- | Registered Processes
+-----------------------------------------------------------------------------
+
+-- | Associates a Name with the process Pid.
+foreign import register :: Atom -> Pid -> Process ()
+
+-- | Remove the Name to Pid association.
+foreign import unregister :: Atom -> Process ()
+
+registered :: Process [Atom]
+registered = ffiIO0 :erlang :registered
+
+foreign import whereis :: Atom -> Process (Maybe Pid)
+
+-----------------------------------------------------------------------------
+-- | Process Group Leader
+-----------------------------------------------------------------------------
+
+groupLeader :: Process Pid
+groupLeader = ffiIO0 :erlang :group_leader
+
+foreign import setGroupLeader :: Pid -> Pid -> Process ()
+
+-----------------------------------------------------------------------------
+-- | Process Termination
+-----------------------------------------------------------------------------
+
+exit :: Atom -> Process ()
+exit = ffiIO1 :erlang :exit
+
+foreign import exitProc :: Pid -> Atom -> Process()
+
+foreign import killProc :: Pid -> Process ()
+
+-----------------------------------------------------------------------------
+-- | Process Scheduling
+-----------------------------------------------------------------------------
+
+foreign import resume :: Pid -> Process ()
+
+foreign import suspend :: Pid -> Process ()
+
+foreign import yield :: Process ()
+
+timerSleep :: Integer -> IO ()
+timerSleep = ffiIO1 :timer :sleep

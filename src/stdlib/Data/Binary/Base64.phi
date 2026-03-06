@@ -1,0 +1,24 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Binary.Base64
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Base64 Encode/Decode module.
+--
+-----------------------------------------------------------------------------
+module Data.Binary.Base64 (encode, decode)  where
+
+import Foreign (ffi1)
+
+encode :: Binary -> Binary
+encode = ffi1 :base64 :encode
+
+-- TODO: handle exception?
+decode :: Binary -> Binary
+decode = ffi1 :base64 :decode

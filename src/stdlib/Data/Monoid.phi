@@ -1,0 +1,30 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Monoid
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Monoid typeclass.
+--
+-----------------------------------------------------------------------------
+module Data.Monoid (class Monoid, mempty) where
+
+import Data.Semigroup (class Semigroup)
+import Data.Unit (Unit, unit)
+
+class Semigroup m => Monoid m where
+  mempty :: m
+
+instance Monoid (List a) where
+  mempty = []
+
+instance Monoid Unit where
+  mempty = unit
+
+instance (Monoid a, Monoid b) => Monoid (a, b) where
+  mempty = (mempty, mempty)

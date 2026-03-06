@@ -1,0 +1,35 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Application.Config
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Application Config module.
+-----------------------------------------------------------------------------
+module Control.Application.Config where
+
+import Control.Application.Types
+import Control.Monad (IO)
+import Data.Map (Map)
+
+import Foreign (ffiIO1)
+
+type Get t = Atom -> Config -> t
+
+-- | See: http://erlang.org/doc/man/config.html
+getConfig :: Application -> IO Config
+getConfig = ffiIO1 :application :get_all_env
+
+foreign import getAtom :: Get Atom
+foreign import getBool :: Get Boolean
+foreign import getInt :: Get Integer
+foreign import getFloat :: Get Float
+foreign import getString :: Get String
+foreign import getList :: forall a. Get [a]
+foreign import getMap :: forall k v. Get (Map k v)
+foreign import getRecord :: forall r. Get r

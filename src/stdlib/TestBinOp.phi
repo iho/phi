@@ -1,0 +1,7 @@
+module TestBinOp where
+    
+add :: forall a. a -> a -> a
+add a b = a + b
+
+eq :: forall a. a -> a -> Boolean
+eq a b = a == b

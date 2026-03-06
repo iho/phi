@@ -1,0 +1,62 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  System.Error
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Handle the system Error/Exception.
+--
+-----------------------------------------------------------------------------
+module System.Error where
+
+import Control.Monad (IO, pure)
+import Data.Functor (map)
+import Data.Either (Either(..))
+import Data.Show (class Show)
+import Data.Void (Void)
+import Data.Function (const)
+
+-- IO Exception
+foreign import data Error :: Type
+
+instance Show Error where
+  show = showErrorImpl
+
+foreign import showErrorImpl :: Error -> String
+
+-- erlang:raise(Class, Reason, Stacktrace) -> no_return()
+
+throw :: forall e. e -> IO Void
+throw s = throwException s
+
+try :: forall a e. IO a -> IO (Either e a)
+try action = catchException (map Right action) (\e -> pure (Left e))
+
+catch :: forall a e. IO a -> (e -> IO a) -> IO a
+catch = catchException
+{-
+foreign import error :: String -> Error
+
+foreign import message :: Error -> String
+
+foreign import name :: Error -> String
+-}
+
+foreign import throwException :: forall e. e -> IO Void
+
+foreign import catchException :: forall a e. IO a -> (e -> IO a) -> IO a
+
+foreign import bracket :: forall a b c. IO a -> (a -> IO b) -> (a -> IO c) -> IO c
+
+bracket_ :: forall a b c. IO a -> IO b -> IO c -> IO c
+bracket_ before end thing = bracket before (const end) (const thing)
+
+foreign import bracketOnError :: forall a b c. IO a -> (a -> IO b) -> (a -> IO c) -> IO c
+
+foreign import finally :: forall a b. IO a -> IO b -> IO a
+foreign import onException :: forall a b. IO a -> IO b -> IO a

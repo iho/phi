@@ -1,0 +1,4 @@
+module TestTuple where
+    
+maketuple :: forall a b. a -> b -> (a, b)
+maketuple a b = (a, b)

@@ -1,0 +1,38 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.GenStatem.Proxy
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The GenStatem Behaviour Proxy.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.GenStatem.Proxy where
+
+import Control.Process (Process)
+import Data.Unit (Unit)
+
+type CallbackMode = Atom
+
+-- | Module:init(Args) -> Result(StateType)
+foreign import init :: forall a res. a -> Process res
+
+-- | Module:callback_mode() -> CallbackMode
+foreign import callback_mode :: CallbackMode
+
+-- | Module:handle_event(EventType, EventContent, State, Data) -> Result
+foreign import handle_event
+  :: forall t e s d r. t -> e -> s -> d -> Process r
+
+-- | Module:terminate(Reason, State, Data) -> Ignored
+foreign import terminate
+  :: forall r s d. r -> s -> d -> Process ()
+
+-- | Module:code_change(OldVsn, OldState, OldData, Extra) -> Result
+foreign import code_change
+  :: forall v s d e r. v -> s -> d -> e -> Process r

@@ -1,0 +1,72 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Distributed.Node
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Distributed Node module.
+--
+-----------------------------------------------------------------------------
+module Control.Distributed.Node
+  ( Cookie
+  , Node
+  , NodeType(..)
+  , nodes
+  , nodesOf
+  , nodeOfPid
+  , nodeOfRef
+  , selfNode
+  , disconnect
+    -- * cookie
+  , getCookie
+  , setCookie
+  , isAlive
+  , monitorNode
+  ) where
+
+import Control.Monad (IO)
+import Data.Maybe (Maybe)
+import Data.Ref (Reference)
+import Data.Pid (Pid)
+import Data.Unit (Unit)
+import Foreign (ffiIO0, ffiIO1)
+
+type Cookie = String
+
+-- A distributed Node.
+type Node = Atom
+
+data NodeType = Hidden | Connected | Known | Visible
+
+nodes :: IO [Node]
+nodes = ffiIO0 :erlang :nodes
+
+foreign import nodesOf :: NodeType -> IO [Node]
+
+-- Return the name of this node.
+selfNode :: IO Node
+selfNode = ffiIO0 :erlang :node
+
+nodeOfPid :: Pid -> IO Node
+nodeOfPid = ffiIO1 :erlang :node
+
+nodeOfRef :: Reference -> IO Node
+nodeOfRef = ffiIO1 :erlang :node
+
+foreign import disconnect :: Node -> IO (Maybe Boolean)
+
+foreign import getCookie :: IO Cookie
+
+foreign import setCookie :: Node -> Cookie -> IO ()
+
+foreign import isAlive :: IO Boolean
+
+foreign import monitorNode :: Node -> Boolean -> IO Boolean
+
+-- spawn[_link|_opt](Node, Fun): Creates a process at a remote node.
+-- spawn[_link|opt](Node, Module, FunctionName, Args): Creates a process at a remote node.

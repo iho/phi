@@ -1,0 +1,57 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Ring
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Ring typeclass.
+--
+-----------------------------------------------------------------------------
+module Data.Ring where
+
+import Data.Semiring (class Semiring, zero)
+import Data.Ord (class Ord, (>=))
+
+class Semiring a => Ring a where
+  sub :: a -> a -> a
+
+infixl 6 sub as -
+
+instance Ring Integer where
+  sub = intSub
+
+instance Ring Float where
+  sub = floatSub
+
+class Ring a => Division a where
+  div :: a -> a -> a
+
+infixl 7 div as /
+
+instance Division Integer where
+  div = intDiv
+
+instance Division Float where
+  div = floatDiv
+
+rem :: Integer -> Integer -> Integer
+rem = intRem
+
+infixl 7 rem as %
+
+abs :: forall a. Ord a => Ring a => a -> a
+abs x = if x >= zero then x else negate x
+
+foreign import intSub :: Integer -> Integer -> Integer
+foreign import floatSub :: Float -> Float -> Float
+foreign import intDiv :: Integer -> Integer -> Integer
+foreign import floatDiv :: Float -> Float -> Float
+foreign import intRem :: Integer -> Integer -> Integer
+
+negate :: forall a. Ring a => a -> a
+negate a = zero - a

@@ -1,0 +1,86 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Application
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Application module.
+--
+-----------------------------------------------------------------------------
+module Control.Application
+  ( ensureAllStarted
+  , ensureAllRestarted
+  , ensureStarted
+  , ensureRestarted
+  , getApplication
+  , getApplicationOfPid
+  , load
+  , loadedApplications
+  , start
+  , restart
+  , stop
+  , takeover
+  , unload
+  , whichApplications
+  , module Control.Application.Config
+  , module Control.Application.Resource
+  , module Control.Application.Types
+  ) where
+
+import Control.Application.Config
+  ( Get
+  , getConfig
+  , getAtom
+  , getBool
+  , getInt
+  , getFloat
+  , getString
+  , getList
+  , getMap
+  , getRecord
+  )
+import Control.Application.Resource (getAppSpec)
+import Control.Application.Types
+import Control.Monad (IO)
+import Data.Maybe (Maybe)
+import Data.Pid (Pid)
+import Data.Unit (Unit)
+
+-- Ensure to start an application with its dependencies.
+foreign import ensureAllStarted :: Application -> IO [Application]
+
+-- Ensure to restart an application with its dependencies.
+foreign import ensureAllRestarted
+  :: Application -> RestartType -> IO [Application]
+
+-- Ensure to start an application.
+foreign import ensureStarted :: Application -> IO ()
+
+-- Ensure to restart an application.
+foreign import ensureRestarted
+  :: Application -> RestartType -> IO ()
+
+foreign import getApplication :: IO (Maybe Application)
+
+foreign import getApplicationOfPid :: Pid -> IO (Maybe Application)
+
+foreign import load :: Application -> IO ()
+
+foreign import loadedApplications :: IO [AppDescr]
+
+foreign import start :: Application -> IO ()
+
+foreign import restart :: Application -> RestartType -> IO ()
+
+foreign import stop :: Application -> IO ()
+
+foreign import takeover :: Application -> RestartType -> IO ()
+
+foreign import unload :: Application -> IO ()
+
+foreign import whichApplications :: IO [AppSpec]

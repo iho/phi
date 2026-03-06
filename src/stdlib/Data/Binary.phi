@@ -1,0 +1,124 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Binary
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Erlang Binary datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Binary where
+
+import Data.Term (Term)
+import Foreign (ffi1, ffi2, ffi3)
+
+type BitString = Binary
+
+foreign import data Pattern :: Type
+
+-- | Returns the size in bits of Bitstring.
+bitSize :: BitString -> Integer
+bitSize = ffi1 :erlang :bit_size
+
+-- | Returns the size in bytes of Bitstring.
+byteSize :: BitString -> Integer
+byteSize = ffi1 :erlang :bit_size
+
+data SplitOption = SplitGlobal 
+                 | SplitTrim 
+                 | SplitTrimAll 
+                 | SplitScope Integer Integer
+
+-- | Split a binary into a list binaries.
+foreign import split :: Binary -> Pattern -> [SplitOption] -> [Binary]
+
+-- | Binary to Atom.
+toAtom :: Binary -> Atom
+toAtom = ffi1 :erlang :binary_to_atom
+
+-- | Binary to existing Atom.
+toExistingAtom :: Binary -> Atom -- TODO: exception?
+toExistingAtom = ffi1 :erlang :binary_to_existing_atom
+
+-- | Binary to Float.
+toFloat :: Binary -> Float -- TODO: exception?
+toFloat = ffi1 :erlang :binary_to_float
+
+-- | Binary to Integer
+toInt :: Binary -> Integer
+toInt = ffi1 :erlang :binary_to_integer
+
+toList :: Binary -> List Integer
+toList = ffi1 :erlang :binary_to_list
+
+toStr :: Binary -> String
+toStr = ffi1 :erlang :binary_to_list
+
+toTerm :: Binary -> Term
+toTerm = ffi1 :erlang :binary_to_term
+
+-----------------------------------------------------------------------------
+-- | Operators
+
+-- | Get Byte from Binary
+at :: Binary -> Integer -> Integer -- TODO: exception?
+at = ffi2 :binary :at
+
+-- | Get Bytes from Binary
+binToList :: Binary -> Integer -> Integer -> [Integer]
+binToList = ffi3 :binary :bin_to_list
+
+duplicate :: Binary -> Integer -> Binary
+duplicate = ffi2 :binary :copy
+
+copy :: Binary -> Binary
+copy = ffi1 :binary :copy
+
+first :: Binary -> Integer
+first = ffi1 :binary :first
+
+last :: Binary -> Integer
+last = ffi1 :binary :last
+
+listToBin :: forall a. [a] -> Binary
+listToBin = ffi1 :binary :list_to_bin
+
+compile_pattern :: [Binary] -> Pattern
+compile_pattern = ffi1 :binary :compile_pattern
+
+data ReplaceOption = ReplaceGlobal
+                   | ReplaceScope Integer Integer
+                   | InsertReplaced [Integer]
+
+foreign import replace :: Binary -> Pattern -> Binary -> [ReplaceOption] -> Binary
+
+part :: Binary -> Integer -> Integer -> Binary
+part = ffi3 :binary :part
+
+referencedByteSize :: Binary -> Integer
+referencedByteSize = ffi1 :binary :referenced_byte_size
+
+foreign import matches :: Binary -> Pattern -> [(Integer, Integer)] -> [(Integer, Integer)]
+
+longestCommonPrefix :: [Binary] -> Integer
+longestCommonPrefix = ffi1 :binary :longest_common_prefix
+
+longestCommonSuffix :: [Binary] -> Integer
+longestCommonSuffix = ffi1 :binary :longest_common_suffix
+
+decodeUnsigned :: Binary -> Integer
+decodeUnsigned = ffi1 :binary :decode_unsigned
+
+decodeUnsignedLittle :: Binary -> Integer
+decodeUnsignedLittle bin = ffi2 :binary :decode_unsigned bin :little
+
+encodeUnsigned :: Integer -> Binary
+encodeUnsigned = ffi1 :binary :encode_unsigned
+
+encodeUnsignedLittle :: Integer -> Binary
+encodeUnsignedLittle bin = ffi2 :binary :encode_unsigned bin :little

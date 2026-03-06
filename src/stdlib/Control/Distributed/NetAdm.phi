@@ -1,0 +1,24 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Distributed.NetAdm
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Distributed networking kernel.
+--
+-----------------------------------------------------------------------------
+module Control.Distributed.NetAdm where
+
+import Control.Distributed.Node (Node)
+import Control.Process (Process)
+import Network.Inet (Hostname, PortNumber)
+
+foreign import localhost :: Process Hostname
+foreign import names :: Process [(Hostname, PortNumber)]
+foreign import namesAt :: Hostname -> Process [(Hostname, PortNumber)]
+foreign import ping :: Node -> Process Boolean

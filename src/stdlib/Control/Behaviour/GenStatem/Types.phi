@@ -1,0 +1,74 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.GenStatem.Types
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The GenStatem Types.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.GenStatem.Types
+  ( Action(..)
+  , EventType(..)
+  , InitResult(..)
+  , Transition(..)
+  , StatemRef(..)
+  , module Control.Behaviour.GenTypes
+  ) where
+
+import Control.Behaviour.GenTypes
+import Control.Distributed.Node (Node)
+import Control.Process (ExitReason)
+import Data.Pid (Pid)
+
+-- | Event Type
+data EventType
+  = Call From | Cast | Info
+    -- ^ external event type
+  | Timeout
+    -- ^ timeout event type
+  | Internal
+    -- ^ internal
+
+-- | Statem Action
+data Action e
+  = Postpone
+  | NextEvent EventType e
+  | Hibernate
+  | TimeoutEvent Integer e
+  | TimeoutCancel
+  | TimeoutUpdate e
+  | StateTimeout Integer e
+  | StateTimeoutCancel
+  | StateTimeoutUpdate e
+
+-- | Init Result
+data InitResult e s d
+  = InitOk s d [Action e]
+    -- ^ {ok, State, Actions}
+  | InitIgnore
+    -- ^ ignore
+  | InitStop ExitReason
+    -- ^ {stop, Reason}
+
+-- | Statem Transition
+data Transition e s d
+  = Keep d [Action e]
+  | Next s d [Action e]
+  | Repeat d [Action e]
+  | Shutdown ExitReason d
+
+data StatemRef
+  = StatemPid Pid
+    -- ^ The Pid of GenStatem.
+  | StatemRef Name
+    -- ^ The GenStatem is locally registered.
+  | StatemRefAt Name Node
+    -- ^ The GenStatem is locally registered on another node.
+  | StatemRefGlobal Name
+    -- ^ The GenStatem is globally registered in global.

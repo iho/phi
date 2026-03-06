@@ -1,0 +1,3 @@
+module Runtime.List (nil) where
+
+foreign import nil :: forall a. [a]

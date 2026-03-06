@@ -1,0 +1,46 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Traversable
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Traversable typeclass.
+--
+-----------------------------------------------------------------------------
+module Data.Traversable
+  ( class Traversable
+  , traverse, sequence, mapM
+  ) where
+
+import Data.Foldable (class Foldable)
+import Control.Monad (class Applicative, class Functor, class Monad, map, pure, liftA2)
+import Data.Functor ((<$>))
+
+class (Functor t, Foldable t) => Traversable t where
+  traverse :: forall a b m. Applicative m => (a -> m b) -> t a -> m (t b)
+  sequence :: forall a m. Applicative m => t (m a) -> m (t a)
+
+instance Traversable List where
+  traverse = traverseDefault
+  sequence = sequencListImpl
+
+mapM :: forall a b m t. Monad m => Traversable t => (a -> m b) -> t a -> m (t b) 
+mapM f l = sequence (map f l)
+
+sequencListImpl :: forall a m. Applicative m => List (m a) -> m (List a)
+sequencListImpl [] = pure []
+sequencListImpl [x|xs] = liftA2 (\a b -> [a | b] ) x (sequencListImpl xs)
+
+traverseDefault
+  :: forall t a b m
+   . Traversable t
+  => Applicative m
+  => (a -> m b)
+  -> t a
+  -> m (t b)
+traverseDefault f ta = sequence (f <$> ta)

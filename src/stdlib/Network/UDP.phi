@@ -1,0 +1,89 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Network.UDP
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The UDP Socket module.
+--
+-----------------------------------------------------------------------------
+module Network.UDP
+  ( open
+  , openWith
+  , recv
+  , recvTimeout
+  , send
+  , sendTo
+  , close
+  , controllingProcess
+  , Option(..)
+  , module Network.Inet
+  ) where
+
+import Control.Monad (IO)
+import Data.Pid (Pid)
+import Data.Timeout (Timeout)
+import Data.Unit (Unit)
+import Foreign (ffiIO1)
+import Network.Inet
+  ( Hostname
+  , IpAddress
+  , PortNumber
+  , Socket
+  )
+
+data Option
+  = Active Boolean
+  | ActiveN Integer
+  | AddMembership IpAddress IpAddress
+  | Broadcast Boolean
+  | Buffer Integer
+  | Deliver Atom
+  | Dontroute Boolean
+  | DropMembership IpAddress IpAddress
+  | Header Integer
+  | HighMsgqWatermark Integer
+  | LowMsgqWatermark Integer
+  | MulticastIf IpAddress
+  | MulticastLoop Boolean
+  | MulticastTTL Integer
+  | Priority Integer
+  | Raw Integer Integer Binary
+    -- ^ Protocol OptionNum ValueBin
+  | ReadPackets Integer
+  | Recbuf Integer
+  | ReuseAddr Boolean
+  | Sndbuf Integer
+  | ToS Integer
+  | Tclass Integer
+  | TTL Integer
+  | RecvToS Boolean
+  | RecvTclass Boolean
+  | RecvTTL Boolean
+  | Ipv6only Boolean
+
+foreign import open :: PortNumber -> IO Socket
+
+foreign import openWith :: PortNumber -> [Option] -> IO Socket
+
+foreign import recv
+  :: Socket -> Integer -> IO (IpAddress, PortNumber, Binary)
+
+foreign import recvTimeout
+  :: Socket -> Integer -> Timeout -> IO (IpAddress, PortNumber, Binary)
+
+foreign import send
+  :: Socket -> Hostname -> PortNumber -> Binary -> IO ()
+
+foreign import sendTo
+  :: Socket -> IpAddress -> PortNumber -> Binary -> IO ()
+
+close :: Socket -> IO ()
+close = ffiIO1 :gen_udp :close
+
+foreign import controllingProcess :: Socket -> Pid -> IO ()

@@ -1,0 +1,5 @@
+module TestIf where
+    
+testIf :: forall a. Boolean -> a -> a -> a
+testIf cond t f = 
+    if cond then t else f

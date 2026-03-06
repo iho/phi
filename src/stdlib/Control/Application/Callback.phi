@@ -1,0 +1,24 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Application.Callback
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Application Callback module.
+--
+-----------------------------------------------------------------------------
+module Control.Application.Callback where
+
+import Control.Process (Process)
+import Data.Unit (Unit)
+
+foreign import start :: forall a b st. a -> b -> Process st
+
+foreign import pre_stop :: forall st. st -> Process st
+
+foreign import stop :: forall st. st -> Process ()

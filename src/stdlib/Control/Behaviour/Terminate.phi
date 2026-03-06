@@ -1,0 +1,30 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.Terminate
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Terminate typeclass for behaviours.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.Terminate
+  ( class Terminate
+  , terminate
+  , terminateOk
+  ) where
+
+import Control.Process (ExitReason, Process)
+import Control.Monad (pure)
+
+-- | The Terminate typeclass
+class Terminate st where
+  terminate :: ExitReason -> st -> Process st
+
+-- | The default terminate function.
+terminateOk :: forall st. ExitReason -> st -> Process st
+terminateOk _ st = pure st

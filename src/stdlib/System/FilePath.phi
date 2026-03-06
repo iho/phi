@@ -1,0 +1,74 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  System.FilePath
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The System FilePath module.
+--
+-----------------------------------------------------------------------------
+module System.FilePath
+  ( abspath
+  , basename
+  , combine, (</>)
+  , dirname
+  , extension
+  , filename
+  , isDir
+  , isFile
+  , isAbs
+  , isRel
+  , joinPath
+  , splitPath
+  , module System.IO.Types
+  ) where
+
+import Control.Monad (IO)
+import Foreign (ffi1, ffi2, ffiIO1)
+import System.IO.Types (FilePath)
+
+infixr 5 combine as </>
+
+abspath :: FilePath -> IO FilePath
+abspath = ffiIO1 :filename :absname
+
+basename :: FilePath -> String
+basename = ffi1 :filename :basename
+
+combine :: FilePath -> FilePath -> FilePath
+combine = ffi2 :filename :join
+
+dirname :: FilePath -> FilePath
+dirname = ffi1 :filename :dirname
+
+extension :: FilePath -> String
+extension = ffi1 :filename :extension
+
+filename :: FilePath -> String
+filename = basename
+
+foreign import isAbs :: FilePath -> Boolean
+
+foreign import isRel :: FilePath -> Boolean
+
+isDir :: FilePath -> IO Boolean
+isDir = ffiIO1 :filelib :is_dir
+
+isFile :: FilePath -> IO Boolean
+isFile = ffiIO1 :filelib :is_file
+
+joinPath :: [FilePath] -> FilePath
+joinPath = ffi1 :filename :join
+
+splitPath :: FilePath -> [FilePath]
+splitPath = ffi1 :filename :split
+
+-- TODO: Extension operations.
+-- add
+-- split
+-- take

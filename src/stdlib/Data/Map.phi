@@ -1,0 +1,173 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Map
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Map datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Map where
+
+import Data.Maybe (Maybe)
+import Control.Monad ((<$>), liftA1)
+import Foreign (ffi0, ffi1, ffi2, ffi3, ffi4)
+import Test.QuickCheck (arbitrary, class Arbitrary)
+import Data.Eq (class Eq)
+import Data.Ord (class Ord, compare)
+import Data.Show (class Show, show)
+import Data.Read (class Read, read)
+import Data.Semigroup (class Semigroup, (<>))
+import Data.Monoid (class Monoid, mempty)
+import Data.Functor (class Functor, map)
+import Data.Foldable (class Foldable, foldl, foldr)
+import Data.Traversable (class Traversable, sequence)
+
+foreign import data Map :: Type -> Type -> Type
+
+instance (Show a, Show b) => Show (Map a b) where
+  show x = show (toList x)
+
+instance (Read a, Read b) => Read (Map a b) where
+  read x = fromList (read x)
+
+instance (Ord a, Ord b) => Ord (Map a b) where
+  compare x y = compare (toList x) (toList y)
+
+instance (Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+  arbitrary = fromList <$> arbitrary
+
+instance Eq (Map a b) where
+  eq = eqMapImpl
+
+instance Functor (Map k) where
+  map f x = fromList (map (\(k, v) -> (k, f v)) (toList x))
+
+instance Foldable (Map k) where
+  foldl f init x = foldl (\acc (k, v) -> f acc v) init (toList x)
+  foldr f init x = foldr (\(k, v) acc -> f v acc) init (toList x)
+  foldMap f =  foldr (\x acc -> f x <> acc) mempty
+
+instance Traversable (Map k) where
+  traverse f ta = sequence (f <$> ta)
+  sequence x = liftA1 fromList (sequence (map lifting (toList x)))
+    where lifting (k, v) = liftA1 (\a -> (k, a)) v
+
+foreign import eqMapImpl :: forall a b. Map a b -> Map a b -> Boolean
+
+instance Semigroup (Map a b) where
+  append = merge
+
+instance Monoid (Map a b) where
+  mempty = empty
+
+-- | Returns a new empty map.
+empty :: forall k v. Map k v
+empty = ffi0 :maps :new
+
+-- | Create a map with only one key-value pair.
+foreign import singleton :: forall k v. k -> v -> Map k v
+
+-- | Test if the map is empty.
+foreign import isEmpty :: forall k v. Map k v -> Boolean
+
+-- | Test if the Key exists in the Map.
+isKey :: forall k v. k -> Map k v -> Boolean
+isKey = ffi2 :maps :is_key
+
+-- | Same to `put` function.
+insert :: forall k v. k -> v -> Map k v -> Map k v
+insert = put
+
+-- | Insert the key-value pair into a map.
+put :: forall k v. k -> v -> Map k v -> Map k v
+put = ffi3 :maps :put
+
+-- | Return the `Value` associated with `Key`. Throw exception if the `Key` does not exist.
+get :: forall k v. k -> Map k v -> v
+get = ffi2 :maps :get
+
+-- | Return the `Value` associated with `Key`.
+foreign import lookup :: forall k v. k -> Map k v -> Maybe v
+
+-- | TODO: docs later...
+foreign import mapWithKey :: forall k v. ((k, v) -> v) -> Map k v -> Map k v
+-- map = ffi2 :maps :map
+
+-- | Test if a key is a member of a Map.
+member :: forall k v. k -> Map k v -> Boolean
+member = ffi2 :maps :is_key
+
+-- | Test if a key is not a member of a Map.
+foreign import notMember :: forall k v. k -> Map k v -> Boolean
+
+fold :: forall k v acc. ((k, v, acc) -> acc) -> acc -> Map k v -> acc
+fold = ffi3 :maps :fold
+
+-- | Update an existed key-value pair.
+update :: forall k v. k -> v -> Map k v -> Map k v
+update = ffi3 :maps :update
+
+-- | Update a value in a Map1 associated with Key by calling Fun on the old value to get a new value.
+updateWith :: forall k v. k -> (v -> v) -> Map k v -> Map k v
+updateWith = ffi3 :maps :update_with
+
+updateWithInit :: forall k v. k -> (v -> v) -> v -> Map k v -> Map k v
+updateWithInit = ffi4 :maps :update_with
+
+-- | TODO: docs later...
+foreign import take :: forall k v.  k -> Map k v -> Maybe (v, (Map k v))
+
+-- | Delete the key-value pair, if it exists.
+delete :: forall k v. k -> Map k v -> Map k v
+delete = ffi2 :maps :remove
+
+-- | Returns the size of the Map.
+size :: forall k v. Map k v -> Integer
+size = ffi1 :maps :size
+
+-- | Returns a map Map for which predicate Pred holds true in Map.
+foreign import filter :: forall k v. ((k, v) -> Boolean) -> Map k v -> Map k v
+
+-- | Merges two maps into a single map.
+merge :: forall k v. Map k v -> Map k v -> Map k v
+merge = ffi2 :maps :merge
+
+-- | An alias of `toList` function.
+assocs :: forall k v. Map k v -> [(k,v)]
+assocs = toList
+
+-- | Returns a list of keys contained in a map.
+keys :: forall k v. Map k v -> List k
+keys = ffi1 :maps :keys
+
+-- | Returns a list of values contained in a map.
+values :: forall k v. Map k v -> List v
+values = ffi1 :maps :values
+
+-- | Builds a map from a list of key-value tuples.
+fromList :: forall k v. [(k,v)] -> Map k v
+fromList = ffi1 :maps :from_list
+
+-- | Returns a list of pairs representing the key-value associations of Map.
+toList :: forall k v. Map k v -> [(k,v)]
+toList = ffi1 :maps :to_list
+
+-- | TODO: docs later...
+with :: forall k v. [k] -> Map k v -> Map k v
+with = ffi2 :maps :with
+
+-- | TODO: docs later...
+without :: forall k v. [k] -> Map k v -> Map k v
+without = ffi2 :maps :without
+
+
+tzip :: forall a b. [a] -> [b] -> [(a,b)]
+tzip x [] = []
+tzip [] y = []
+tzip [x|xs] [y|ys] = [ (x,y) | tzip xs ys ]

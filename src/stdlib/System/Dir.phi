@@ -1,0 +1,115 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  System.Dir
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The System Directory module.
+--
+-----------------------------------------------------------------------------
+module System.Dir
+  ( makeDir
+  , makeDirs
+  , listDir
+  , deleteDir
+  , deleteDirRecursively
+  , renameDir
+  , getCwd
+  , setCwd
+  , copyFile
+  , deleteFile
+  , renameFile
+  , getFileSize
+  , makeLink
+  , makeSymLink
+  , deleteLink
+  , getLastModified
+  , module System.IO.Types
+  ) where
+
+import Control.Monad (IO)
+import Data.DateTime (DateTime) -- FIXME later
+import Data.Unit (Unit)
+import Foreign (ffiIO1)
+import System.IO.Types (FilePath)
+
+-----------------------------------------------------------------------------
+-- | Directory operations
+-----------------------------------------------------------------------------
+
+-- | Create directory.
+foreign import makeDir :: FilePath -> IO ()
+
+-- | Create directory recursively.
+foreign import makeDirs :: FilePath -> IO ()
+
+-- | List directories.
+foreign import listDir :: FilePath -> IO [FilePath]
+
+-- | Delete directory.
+foreign import deleteDir :: FilePath -> IO ()
+
+-- | Delete directory recursively.
+-- | OTP 23.0
+foreign import deleteDirRecursively :: FilePath -> IO ()
+
+-- | Rename a directory.
+renameDir :: FilePath -> FilePath -> IO ()
+renameDir = renameFile
+
+-----------------------------------------------------------------------------
+-- | Current, home, and temporary directories
+-----------------------------------------------------------------------------
+
+-- TODO: os.chdir()
+
+-- | Returns the current working directory.
+foreign import getCwd :: IO FilePath
+
+-- | Set the current working directory.
+foreign import setCwd :: FilePath -> IO ()
+
+{-
+foreign import getHomeDir :: IO FilePath
+foreign import getTempDir :: IO FilePath
+-}
+
+-----------------------------------------------------------------------------
+-- | File operations
+-----------------------------------------------------------------------------
+
+-- | Copy a file.
+foreign import copyFile :: FilePath -> FilePath -> IO ()
+
+-- | Delete a File.
+foreign import deleteFile :: FilePath -> IO ()
+
+-- | Rename a directory.
+foreign import renameFile :: FilePath -> FilePath -> IO ()
+
+getFileSize :: FilePath -> IO Integer
+getFileSize = ffiIO1 :filelib :file_size
+
+-- foreign import makeAbsolute :: FilePath -> IO FilePath
+
+-----------------------------------------------------------------------------
+-- | Symbolic links
+-----------------------------------------------------------------------------
+
+foreign import makeLink :: FilePath -> FilePath -> IO ()
+
+foreign import makeSymLink :: FilePath -> FilePath -> IO ()
+
+deleteLink :: FilePath -> IO ()
+deleteLink = deleteFile
+
+-----------------------------------------------------------------------------
+-- | File timestamps
+-----------------------------------------------------------------------------
+
+foreign import getLastModified :: FilePath -> IO DateTime

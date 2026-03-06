@@ -1,0 +1,130 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Set
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Set datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Set where
+
+import Foreign (ffi0, ffi1, ffi2)
+import Test.QuickCheck (arbitrary, class Arbitrary)
+import Control.Monad ((<$>), liftA1)
+
+import Data.Show (class Show, show)
+import Data.Read (class Read, read)
+import Data.Eq (class Eq, eq)
+import Data.Ord (class Ord, compare)
+import Data.Semigroup (class Semigroup, (<>))
+import Data.Monoid (class Monoid, mempty)
+import Data.Functor (class Functor, map)
+import Data.Foldable (class Foldable, foldl, foldr)
+import Data.Traversable (class Traversable, sequence)
+
+foreign import data Set :: Type -> Type
+
+instance Show a => Show (Set a) where
+  show x = show (toList x)
+
+instance Read a => Read (Set a) where
+  read x = fromList (read x)
+
+instance Eq a => Eq (Set a) where
+  eq x y = eq (toList x) (toList y)
+
+instance Ord a => Ord (Set a) where
+  compare x y = compare (toList x) (toList y)
+
+instance Arbitrary v => Arbitrary (Set v) where
+  arbitrary = fromList <$> arbitrary
+
+instance Semigroup (Set a) where
+  append = union
+
+instance Monoid (Set a) where
+  mempty = empty
+
+instance Functor Set where
+  map f x = fromList (map f (toList x))
+
+instance Foldable Set where
+  foldl f init x = foldl f init (toList x)
+  foldr f init x = foldr f init (toList x)
+  foldMap f = foldr (\x acc -> f x <> acc) mempty
+
+instance Traversable Set where
+  traverse f ta = sequence (f <$> ta)
+  sequence x = liftA1 fromList (sequence (toList x))
+
+-- | Returns a new empty set.
+empty :: forall a. Set a
+empty = ffi0 :sets :new
+
+-- | Create a singleton set.
+foreign import singleton :: forall a. a -> Set a
+
+-- | Check if Set is empty.
+isEmpty :: forall a. Set a -> Boolean
+isEmpty = ffi1 :sets :is_empty
+
+-- | Returns true when every element of Set1 is also a member of Set2, otherwise false.
+isSubsetOf :: forall a. Set a -> Set a -> Boolean
+isSubsetOf = ffi2 :sets :is_subset
+
+-- | Returns true if Set1 and Set2 are disjoint (have no elements in common), otherwise false.
+isDisjoint :: forall a. Set a -> Set a -> Boolean
+isDisjoint = ffi2 :sets :is_disjoint
+
+-- | Create a singleton set.
+fromList :: forall a. [a] -> Set a
+fromList = ffi1 :sets :from_list
+
+-- | Returns a new set formed from Set1 with Element inserted.
+insert :: forall a. a -> Set a -> Set a
+insert = ffi2 :sets :add_element
+
+-- | Returns Set1, but with Element removed.
+delete :: forall a. a -> Set a -> Set a
+delete = ffi2 :sets :del_element
+
+-- | Returns true if Element is an element of Set, otherwise false.
+member :: forall a. a -> Set a -> Boolean
+member = ffi2 :sets :is_element
+
+-- | Returns the number of elements in Set.
+size :: forall a. Set a -> Integer
+size = ffi1 :sets :size
+
+-- | An alias of `toList`.
+elems :: forall a. Set a -> [a]
+elems = toList
+
+-- | Convert the set to a list of elements.
+toList :: forall a. Set a -> [a]
+toList = ffi1 :sets :to_list
+
+-- | Returns the merged (union) set of Set1 and Set2.
+union :: forall a. Set a -> Set a -> Set a
+union = ffi2 :sets :union
+
+-- | Returns the intersection of Set1 and Set2.
+intersection :: forall a. Set a -> Set a -> Set a
+intersection = ffi2 :sets :intersection
+
+-- | Difference of two sets.
+difference :: forall a. Set a -> Set a -> Set a
+difference = ffi2 :sets :subtract
+
+-- | Filters elements in Set with boolean function Pred.
+filter :: forall a. (a -> Boolean) -> Set a -> Set a
+filter = ffi2 :sets :filter
+
+-- | Folds Function over every element in Set and returns the final value of the accumulator.
+foreign import fold :: forall a b. (a -> b -> b) -> b -> Set a -> b

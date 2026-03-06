@@ -1,0 +1,134 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.Supervisor.Types
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Supervisor types.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.Supervisor.Types
+  ( ChildId
+  , ChildPid
+  , ChildType(..)
+  , ChildRestart(..)
+  , ChildShutdown(..)
+  , ChildSpec
+  , Child
+  , ChildCounts
+  , ChildError(..)
+  , ChildSpecError(..)
+  , InitResult(..)
+  , Intensity
+  , Strategy(..)
+  , SupFlags
+  , SupRef(..)
+  , module Control.Behaviour.GenTypes
+  ) where
+
+import Control.Behaviour.GenTypes
+import Control.Distributed.Node (Node)
+import Control.Process (Process)
+import Data.Pid (Pid)
+
+-- Child Id
+type ChildId = String
+
+-- Child Pid
+type ChildPid = Pid
+
+-- Child Type
+data ChildType = Worker | Supervisor
+
+-- Child Restart Policy
+data ChildRestart = Permanent | Transient | Temporary
+
+-- Child Shutdown Policy
+data ChildShutdown = BrutalKill | Infinity | Shutdown Integer
+
+-- Child Specification
+type ChildSpec =
+  { childId   :: ChildId
+  , startFun  :: Process Pid
+  , restart   :: ChildRestart
+  , shutdown  :: ChildShutdown
+  , childType :: ChildType
+  , modules   :: [Atom]
+  }
+
+-- Child
+type Child =
+  { childPid  :: ChildPid
+  , childSpec :: ChildSpec
+  }
+
+-- Child Counts
+type ChildCounts =
+  { specs   :: Integer
+    -- ^ The total count of children, dead or alive.
+  , active  :: Integer
+    -- ^ The count of all actively running child processes managed by this supervisor.
+  , supervisors :: Integer
+    -- ^ The count of all children marked as childType = supervisor in the specification list.
+  , workers :: Integer
+    -- ^ The count of all children marked as childType = worker in the specification list.
+  }
+
+-- Child operation error.
+data ChildError
+  = ChildError
+  | ChildAlreadyPresent
+  | ChildAlreadyStarted
+  | ChildIsRunning
+  | ChildIsRestarting
+  | ChildNotFound
+  | ChildSimpleOneForOne
+
+-- Child spec error.
+data ChildSpecError
+  = DuplicateChildName ChildId
+  | InvalidChildSpec ChildSpec
+  | InvalidChildType
+  | InvalidRestartType
+  | InvalidShutdown
+  | InvalidModules
+  | ChildSpecMissingId
+  | ChildSpecMissingStart
+  | ChildSpecError
+
+-- | Init Result
+data InitResult
+  = InitOk SupFlags [ChildSpec]
+    -- ^ {ok, State}
+  | InitIgnore
+    -- ^ ignore
+
+type Intensity = Integer
+
+data Strategy
+  = OneForAll
+  -- ^ Restart all child processes if one terminated.
+  | OneForOne
+  -- ^ Restart only the child processs terminated.
+  | RestForOne
+  -- ^ TODO: comment...
+  | SimpleOneForOne
+  -- ^ TODO: comment...
+
+type SupFlags = (Strategy, Intensity, Integer)
+
+-- Supervisor ref.
+data SupRef
+  = SupName Name
+    -- ^ The supervisor is locally registered.
+  | SupNameAt Name Node
+    -- ^ The supervisor is locally registered at another node.
+  | SupGlobal Name
+    -- ^ The supervisor is globally registered.
+  | SupPid Pid
+    -- ^ The supervisor pid.

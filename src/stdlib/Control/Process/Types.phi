@@ -1,0 +1,25 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Process.Types
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Process Types module.
+--
+-----------------------------------------------------------------------------
+module Control.Process.Types where
+
+import Control.Monad (IO)
+
+-- An Alias of IO.
+type Process = IO
+
+data ExitReason
+  = ExitNormal
+  | ExitShutdown
+  | ExitReason Atom

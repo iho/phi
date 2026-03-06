@@ -1,0 +1,283 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Database.Mnesia
+-- Copyright   :  (c) Feng Lee 2020-2021
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Erlang Mnesia Database.
+--
+-----------------------------------------------------------------------------
+module Database.Mnesia where
+
+import Control.Distributed.Node (Node)
+import Control.Monad (IO)
+import Data.Maybe (Maybe)
+import Data.Unit (Unit)
+import Database.ETS (TableType)
+import Foreign (ffiIO0, ffiIO1, ffiIO2, ffiIO3)
+
+type Table = Atom
+
+type TableOptions =
+  { tableType        :: TableType
+  , attributes       :: [Atom]
+  , ramCopies        :: [Node]
+  , recordName       :: Atom
+  }
+
+data AccessMode = ReadWrite | ReadOnly
+
+data Activity = AsyncDirty | SyncDirty | Transaction | SyncTransaction
+
+data LockKind = RLock | WLock | StickyWLock
+
+data StorageType = RamCopies | DiscCopies | DiscOnlyCopies
+
+data Retries = MaxTime Integer | Infinity
+
+data ConfigKey = ExtraDbNodes | DcDumpLimit
+
+data ConfigValue = Nodes [Node] | Number Integer
+
+abort :: forall r. r -> IO ()
+abort = ffiIO1 :mnesia :abort
+
+foreign import activity :: forall a. Activity -> IO a -> IO a
+
+foreign import addTableCopy :: Table -> Node -> StorageType -> IO ()
+
+foreign import addTableIndex :: Table -> Atom -> IO ()
+
+allKeys :: forall k. Table -> IO [k]
+allKeys = ffiIO1 :mnesia :all_keys
+
+foreign import clearTable :: Table -> IO ()
+
+foreign import createSchema :: [Node] -> IO ()
+
+foreign import createTable :: Table -> TableOptions -> IO ()
+
+foreign import delTableCopy :: Table -> Node -> IO ()
+
+foreign import delTableIndex :: Table -> Integer -> IO ()
+
+foreign import delete :: forall k. Table -> k -> IO ()
+
+foreign import deleteWithLock :: forall k. Table -> k -> LockKind -> IO ()
+
+foreign import deleteObject :: forall r. Table -> r -> IO ()
+
+foreign import deleteObjectWithLock :: forall r. Table -> r -> LockKind -> IO ()
+
+deleteSchema :: [Node] -> IO ()
+deleteSchema = ffiIO1 :mnesia :delete_schema
+
+foreign import deleteTable :: Table -> IO ()
+
+dirtyAllKeys :: forall k. Table -> IO [k]
+dirtyAllKeys = ffiIO1 :mnesia :dirty_all_keys
+
+dirtyDelete :: forall k. Table -> k -> IO ()
+dirtyDelete = ffiIO2 :mnesia :dirty_delete
+
+foreign import dirtyDeleteObject :: forall a. Table -> a -> IO ()
+
+dirtyFirst :: forall k. Table -> IO k
+dirtyFirst = ffiIO1 :mnesia :dirty_first
+
+dirtyIndexRead :: forall k r. Table -> k -> Integer -> IO [r]
+dirtyIndexRead = ffiIO3 :mnesia :dirty_index_read
+
+dirtyLast :: forall k. Table -> IO k
+dirtyLast = ffiIO1 :mnesia :dirty_last
+
+dirtyNext :: forall k. Table -> k -> IO k
+dirtyNext = ffiIO2 :mnesia :dirty_next
+
+dirtyPrev :: forall k. Table -> k -> IO k
+dirtyPrev = ffiIO2 :mnesia :dirty_prev
+
+dirtyRead :: forall k r. Table -> k -> IO r
+dirtyRead = ffiIO2 :mnesia :dirty_read
+
+dirtyWrite :: forall r. Table -> r -> IO ()
+dirtyWrite = ffiIO2 :mnesia :dirty_write
+
+first :: forall k. Table -> IO k
+first = ffiIO1 :mnesia :first
+
+indexRead :: forall k v. Table -> k -> Atom -> IO [v]
+indexRead = ffiIO3 :mnesia :index_read
+
+info :: IO ()
+info = ffiIO0 :mnesia :info
+
+last :: forall k. Table -> IO k
+last = ffiIO1 :mnesia :last
+
+foreign import next :: forall k. Table -> k -> IO (Maybe k)
+
+foreign import prev :: forall k. Table -> k -> IO (Maybe k)
+
+readWith :: forall k v. Table -> k -> IO [v]
+readWith = ffiIO2 :mnesia :read
+
+read :: forall k v. k -> IO [v]
+read = ffiIO1 :mnesia :read
+
+schema :: IO ()
+schema = ffiIO0 :mnesia :schema
+
+start :: IO ()
+start = ffiIO0 :mnesia :start
+
+stop :: IO ()
+stop = ffiIO0 :mnesia :stop
+
+foreign import wread :: forall k v. Table -> k -> IO [v]
+
+foreign import writeWith :: forall v. Table -> v -> IO ()
+
+foreign import write :: forall v. v -> IO ()
+
+foreign import writeWithLock :: forall v. Table -> v -> LockKind -> IO ()
+
+foreign import transaction :: forall a. IO a -> IO a
+
+foreign import transactionWithRetry :: forall a. IO a -> Retries -> IO a
+
+tableInfo :: forall a. Table -> Atom -> IO a
+tableInfo = ffiIO2 :mnesia :table_info
+
+foreign import changeTableAccessMode :: Table -> AccessMode -> IO ()
+
+foreign import changeTableLoadOrder :: Table -> Integer -> IO ()
+
+foreign import changeTableMajority :: Table -> Boolean -> IO ()
+
+foreign import foldl :: forall r a. (r -> a -> a) -> a -> Table -> IO a
+
+foreign import foldr :: forall r a. (r -> a -> a) -> a -> Table -> IO a
+
+foreign import forceLoadTable :: Table -> IO ()
+
+isTransaction :: IO Boolean
+isTransaction = ffiIO0 :mnesia :is_transaction
+
+loadTextfile :: String -> IO ()
+loadTextfile = ffiIO1 :mnesia :load_textfile
+
+foreign import moveTableCopy :: Table -> Node -> Node -> IO ()
+
+foreign import readWithLock :: forall k v.Table -> k -> LockKind -> IO [v]
+
+readLockTable :: Table -> IO ()
+readLockTable = ffiIO1 :mnesia :read_lock_table
+
+reportEvent :: forall a. a -> IO ()
+reportEvent = ffiIO1 :mnesia :report_event
+
+schemaTable :: Table -> IO ()
+schemaTable = ffiIO1 :mnesia :schema
+
+foreign import setMasterNodes :: [Node] -> IO ()
+
+foreign import setMasterNodesWithTable :: Table -> [Node] -> IO ()
+
+snmpCloseTable :: Table -> IO ()
+snmpCloseTable = ffiIO1 :mnesia :snmp_close_table
+
+syncDirty :: forall a. IO a -> IO a
+syncDirty = ffiIO1 :mnesia :sync_dirty
+
+syncLog :: IO ()
+syncLog = ffiIO0 :mnesia :sync_log
+
+foreign import syncTransaction :: forall a. IO a -> IO a
+
+foreign import syncTransactionWithRetries :: forall a. IO a -> Retries -> IO a
+
+asyncDirty :: forall a. IO a -> IO a
+asyncDirty = ffiIO1 :mnesia :async_dirty
+
+foreign import changeConfig :: ConfigKey -> ConfigValue -> IO ConfigValue
+
+dumpLog :: IO ()
+dumpLog = ffiIO0 :mnesia :dump_log
+
+foreign import dumpTables :: [Table] -> IO ()
+
+dumpToTextfile :: String -> IO ()
+dumpToTextfile = ffiIO1 :mnesia :dump_to_textfile
+
+ets :: forall a. IO a -> IO a
+ets = ffiIO1 :mnesia :ets
+
+type Key = Atom
+
+foreign import lockRecord :: Table -> Key -> LockKind -> IO [Node]
+
+foreign import lockTable :: Table -> LockKind -> IO [Node]
+
+foreign import lockGlobal :: Key -> [Node] -> LockKind -> IO [Node]
+
+foreign import matchObjectWith :: forall a v. Table -> a -> LockKind -> IO [v]
+
+foreign import matchObject :: forall a v. a -> IO [v]
+
+foreign import sdelete :: Table -> Key -> IO ()
+
+foreign import sdeleteObject :: forall a. a -> IO ()
+
+foreign import swrite :: forall a. a -> IO ()
+
+foreign import transformTable :: forall a b. Table -> (a -> b) -> [Atom] -> Atom -> IO ()
+
+data What = WSystem | WActivity | WTable Table 
+
+foreign import subscribe :: What -> IO Node
+
+foreign import unsubscribe :: What -> IO Node
+
+data DebugLevel = Dnone | Dverbose | Ddebug | Dtrace
+
+foreign import setDebugLevel :: DebugLevel -> IO DebugLevel
+
+foreign import dirtyMatchObjectWith :: forall a v. Table -> a -> IO [v]
+
+foreign import dirtyMatchObject :: forall a v. a -> IO [v]
+
+dirtyUpdateCounter :: Table -> Key -> Integer -> IO Integer
+dirtyUpdateCounter = ffiIO3 :mnesia :dirty_update_counter
+
+{-
+activate_checkpoint/1
+backup/1
+backup_checkpoint/2
+change_table_copy_type/3
+deactivate_checkpoint/1
+dirty_index_match_object/2
+dirty_index_match_object/3
+dirty_select/2
+error_description/1
+index_match_object/2
+index_match_object/4
+restore/2
+select/2
+select/4
+select/1
+snmp_get_mnesia_key/2
+snmp_get_next_index/2
+snmp_get_row/2
+snmp_open_table/2
+table/1
+traverse_backup/4
+uninstall_fallback/0
+uninstall_fallback/1
+wait_for_tables/2
+-}

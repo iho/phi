@@ -1,0 +1,127 @@
+module Test where
+
+import Test.QuickCheck (TestGroup(..), runTest)
+import Prelude
+import Test.Data.String as S
+import Test.Data.Map as M
+import Test.Data.Atom as A
+import Test.Data.Array as A1
+import Test.Data.Bool as TB
+import Test.Data.List as L
+import Test.Data.Either as Ei
+import Test.Data.Tuple as Tu
+import Test.Data.Maybe as May
+import Test.Data.Atomics as Atomics
+import Test.Data.OrdDict as OD
+import Test.Data.OrdSets as OS
+import Test.Data.Queue as Q
+import Test.Data.Result as R
+import Test.Data.Set as St
+import Test.Data.Show as Show
+import Test.Data.Read as Read
+import Test.Data.Monoid as Monoid
+import Test.Data.Digraph as G
+import Test.Data.Ord as Ord
+import Test.Data.Enum as Enum
+import Test.Data.Function as Func
+import Test.Data.Semiring as SR
+import Test.Data.Ring as Ring
+import Test.Data.Time as Time
+import Test.Data.Timeout as Timeout
+import Test.Data.Ordering as Ordering
+import Test.Data.Functor as Functor
+import Test.Data.Term.Persistent as P
+import Test.Data.Regex as Re
+import Test.System.Dir as Dir
+import Test.Data.Bits as Bits
+import Test.Data.Char as Char
+import Test.System.Env as Env
+import Test.System.File as File
+import Test.System.FilePath as FilePath
+import Test.System.Error as Error
+import Test.Control.Process as Proc
+import Test.Database.ETS as ETS
+import Test.Network.UDP as UDP
+import Test.Network.TCP as TCP
+import Test.Database.Mnesia as Mnesia
+import Test.System.IO as IO
+
+import Test.Control.Monad as Monad
+import Test.Control.Monad.Reader as Reader
+import Test.Control.Monad.State as StateM
+import Test.Control.Monad.Writer as Writer
+
+import Test.Control.ReceiveSyntax as Rec
+import Test.System.Timer as Timer
+
+import Test.Text.Parsec as Parsec
+import Test.Text.Json as Json
+
+main :: IO ()
+main = runTest $ TxG "lib" 
+   [ TxG "Data" [
+                   TxG "Map"      [M.test]
+                 , TxG "String"   [S.test]
+                 , TxG "Atom"     [A.test]
+                 , TxG "Array"    [A1.test]
+                 , TxG "Atomics"  [Atomics.test]
+                 , TxG "Bool"     [TB.test]
+                 , TxG "List"     [L.test]
+                 , TxG "Bool"     [TB.test]
+                 , TxG "Either"   [Ei.test]
+                 , TxG "Tuple"    [Tu.test]
+                 , TxG "Maybe"    [May.test]
+                 , TxG "OrdDict"  [OD.test]
+                 , TxG "OrdSets"  [OS.test]
+                 , TxG "Queue"    [Q.test]
+                 , TxG "Result"   [R.test]
+                 , TxG "Set"      [St.test]
+                 , TxG "Tuple"    [Tu.test]
+                 , TxG "Show"     [Show.test]
+                 , TxG "Read"     [Read.test]
+                 , TxG "Monoid"   [Monoid.test]
+                 , TxG "Graph"    [G.test]
+                 , TxG "Ord"      [Ord.test]
+                 , TxG "Enum"     [Enum.test]
+                 , TxG "Function" [Func.test]
+                 , TxG "Semiring" [SR.test]
+                 , TxG "Ring"     [Ring.test]
+                 , TxG "Time"     [Time.test]
+                 , TxG "Timeout"  [Timeout.test]
+                 , TxG "Ordering" [Ordering.test]
+                 , TxG "Functor"  [Functor.test]
+                 , TxG "Term"     [TxG "Persistent" [P.test]]
+                 , TxG "Regex" [Re.test]
+                 , TxG "Bits"  [Bits.test]
+                 , TxG "Char"  [Char.test]
+                 ],
+     TxG "System" [ TxG "Dir"     [Dir.test]
+                  , TxG "Env"     [Env.test]
+                  , TxG "File"    [File.test]
+                  , TxG "FilePath" [FilePath.test]
+                  , TxG "IO" [IO.test]
+                  , TxG "Error"   [Error.test]
+                  , TxG "Timer"   [Timer.test]
+                  ],
+     TxG "Control" [ TxG "Process"   [Proc.test]
+
+                   , TxG "Monad" [Monad.test]
+                   , TxG "Monads" [ TxG "Reader" [Reader.test]
+                                  , TxG "State" [StateM.test]
+                                  , TxG "Writer" [Writer.test]
+                                  ]
+
+                   , TxG "ReceiveSyntax" [Rec.test]
+
+                   ],
+     TxG "Database" [ TxG "ETS"    [ETS.test]
+                    , TxG "Mnesia" [Mnesia.test]
+                    ],
+     TxG "Network"  [ TxG "UDP"   [UDP.test]
+                    , TxG "TCP"   [TCP.test]
+                    ],
+     TxG "Text"     [ TxG "Parsec" [Parsec.test]
+                    , TxG "Json"   [Json.test]
+                    ]
+   ]
+

@@ -1,0 +1,56 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Timeout
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Timeout datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Timeout where
+
+import Data.Eq (class Eq, (==))
+import Data.Ord (class Ord, compare)
+import Data.Ordering (Ordering(..))
+import Data.Show (class Show, show)
+import Data.Read (class Read, read)
+import Data.Function (error)
+import Data.List ((++))
+import Foreign (class IsFFI)
+import Data.Term (Term, toTerm)
+
+-- | The Erlang Timeout.
+data Timeout = Infinity | Timeout Integer
+
+instance IsFFI Timeout Term where
+  toFFI Infinity = toTerm :infinity
+  toFFI (Timeout num) = toTerm num
+
+instance Show Timeout where
+  show Infinity = "Infinity"
+  show (Timeout x) = "Timeout " ++ show x
+
+instance Read Timeout where
+  read "Infinity" = Infinity
+  read ['T'|['i'|['m'|['e'|['o'|['u'|['t'|[' '|xs]]]]]]]] = Timeout (read xs)
+  read _ = error "not a Timeout"
+
+instance Eq Timeout where
+  eq Infinity Infinity = true
+  eq (Timeout x) (Timeout y) = x == y
+  eq _ _ = false
+
+instance Ord Timeout where
+  compare Infinity Infinity = EQ
+  compare Infinity _        = GT
+  compare _ Infinity        = LT
+  compare (Timeout x) (Timeout y) = x `compare` y
+
+isInfinity :: Timeout -> Boolean
+isInfinity Infinity = true
+isInfinity _        = false

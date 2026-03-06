@@ -1,0 +1,136 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Digraph
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Directed Graph datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Digraph where
+
+import Control.Monad (IO, discard, pure)
+import Data.Unit (Unit, unit)
+import Data.Maybe (Maybe)
+import Data.Either (Either)
+import Data.Eq (class Eq)
+import Data.Bool (Bool)
+import Foreign (ffiIO1, ffiIO2, ffiIO3)
+
+foreign import data Graph :: Type -> Type -> Type
+--                           ^-----  ^---
+--               Label Type: Vertex  Edge
+
+foreign import data Edge :: Type -> Type
+foreign import data Vertex :: Type -> Type
+
+-- Constructor for Edge & Vertex
+foreign import edgeOf :: forall b. Integer -> Edge b
+foreign import vertexOf :: forall a. Integer -> Vertex a
+
+-- Extractor for Edge & Vertex
+foreign import edgeID :: forall b. Edge b -> Integer
+foreign import vertexID :: forall a. Vertex a -> Integer
+
+foreign import eqImpl :: forall a b. Graph a b -> Graph a b -> Bool
+
+instance Eq (Graph a b) where
+  eq = eqImpl
+
+data GraphType = Cyclic | Acyclic | Protected | Private
+
+foreign import new :: forall a b. [GraphType] -> IO (Graph a b)
+
+data EdgeError a = BadEdge [Vertex a] | BadVertex (Vertex a)
+
+foreign import addEdge :: forall a b. Graph a b -> Vertex a -> Vertex a -> b -> IO (Either (EdgeError a) (Edge b))
+
+foreign import addVertex :: forall a b. Graph a b -> a -> IO (Vertex a)
+
+foreign import modifyEdge :: forall a b. Graph a b -> Edge b -> Vertex a -> Vertex a -> b -> IO (Either (EdgeError a) (Edge b))
+
+modifyVertex :: forall a b. Graph a b -> Vertex a -> a -> IO (Vertex a)
+modifyVertex = ffiIO3 :digraph :add_vertex
+
+delEdge :: forall a b. Graph a b -> Edge b -> IO ()
+delEdge g e = do
+  ffiIO2 :digraph :del_edge g e
+  pure ()
+
+delEdges :: forall a b. Graph a b -> [Edge b] -> IO ()
+delEdges g es = do
+  ffiIO2 :digraph :del_edges g es
+  pure ()
+
+delPath :: forall a b. Graph a b -> Vertex a -> Vertex a -> IO ()
+delPath g v1 v2 = do 
+  ffiIO3 :digraph :del_path g v1 v2
+  pure ()
+
+delVertex :: forall a b. Graph a b -> Vertex a -> IO ()
+delVertex g v = do
+  ffiIO2 :digraph :del_vertex g v
+  pure ()
+
+delVertices :: forall a b. Graph a b -> [Vertex a] -> IO ()
+delVertices g vs = do
+  ffiIO2 :digraph :del_vertices g vs
+  pure ()
+
+-- | use graph after delete is a undefined behaviour
+delete :: forall a b. Graph a b -> IO ()
+delete = ffiIO1 :digraph :delete
+
+foreign import edge :: forall a b. Graph a b -> Edge b -> IO (Maybe (Vertex a, Vertex a, b))
+
+allEdges :: forall a b. Graph a b -> IO [Edge b]
+allEdges = ffiIO1 :digraph :edges
+
+foreign import vertex :: forall a b. Graph a b -> Vertex a -> IO (Maybe a)
+
+allVertices :: forall a b. Graph a b -> IO [Vertex a]
+allVertices = ffiIO1 :digraph :vertices
+
+edges :: forall a b. Graph a b -> Vertex a -> IO [Edge b]
+edges = ffiIO2 :digraph :edges
+
+foreign import getCycle :: forall a b. Graph a b -> Vertex a -> IO [Vertex a]
+
+foreign import getPath :: forall a b. Graph a b -> Vertex a -> Vertex a -> IO [Vertex a]
+
+foreign import getShortCycle :: forall a b. Graph a b -> Vertex a -> IO [Vertex a]
+
+foreign import getShortPath :: forall a b. Graph a b -> Vertex a -> Vertex a -> IO [Vertex a]
+
+inDegree :: forall a b. Graph a b -> Vertex a -> IO Integer
+inDegree = ffiIO2 :digraph :in_degree
+
+inEdges :: forall a b. Graph a b -> Vertex a -> IO [Edge b]
+inEdges = ffiIO2 :digraph :in_edges
+
+inNeighbours :: forall a b. Graph a b -> Vertex a -> IO [Vertex a]
+inNeighbours = ffiIO2 :digraph :in_neighbours
+
+outDegree :: forall a b. Graph a b -> Vertex a -> IO Integer
+outDegree = ffiIO2 :digraph :out_degree
+
+outEdges :: forall a b. Graph a b -> Vertex a -> IO [Edge b]
+outEdges = ffiIO2 :digraph :out_edges
+
+outNeighbours :: forall a b. Graph a b -> Vertex a -> IO [Vertex a]
+outNeighbours = ffiIO2 :digraph :out_neighbours
+
+noEdges :: forall a b. Graph a b -> IO Integer
+noEdges = ffiIO1 :digraph :no_edges
+
+noVertices :: forall a b. Graph a b -> IO Integer
+noVertices = ffiIO1 :digraph :no_vertices
+
+data GraphInfo = GraphMemoryInfo Integer | GraphTypeInfo GraphType
+
+foreign import info :: forall a b. Graph a b -> IO [GraphInfo]

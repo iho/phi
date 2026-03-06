@@ -1,0 +1,35 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.GenEvent.Types
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The GenEvent Types.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.GenEvent.Types
+  ( EMgrRef(..)
+  , InitResult(..)
+  , module Control.Behaviour.GenTypes
+  )  where
+
+import Control.Behaviour.GenTypes
+import Control.Distributed.Node (Node)
+import Control.Process (ExitReason)
+import Data.Pid (Pid)
+
+data EMgrRef
+  = EMgrPid Pid
+  | EMgrRef Name
+  | EMgrRefAt Name Node
+  | EMgrRefGlobal Name
+
+data InitResult st
+  = InitOk st
+  | InitOkHib st
+  | InitError ExitReason

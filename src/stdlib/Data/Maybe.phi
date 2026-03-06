@@ -1,0 +1,100 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Mabye
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Maybe datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Maybe
+  ( Maybe(..)
+  , maybe
+  , fromMaybe
+  , isJust
+  , isNothing
+  , fromJust
+  ) where
+
+import Control.Monad (class Applicative, class Alternative, class Monad, class MonadPlus, pure, liftA1)
+import Data.Functor (class Functor, map)
+import Data.Function (const, error, identity)
+import Data.Semigroup (class Semigroup, (<>))
+import Data.Monoid (class Monoid, mempty)
+import Data.Foldable (class Foldable)
+import Data.Traversable (class Traversable)
+import Data.Eq
+
+data Maybe a = Nothing | Just a
+
+instance Eq a => Eq (Maybe a) where
+  eq Nothing Nothing = true
+  eq (Just a) (Just b) = a == b
+  eq _ _ = false
+
+instance Functor Maybe where
+  map fn (Just x) = Just (fn x)
+  map _  _        = Nothing
+
+instance Applicative Maybe where
+  apply (Just fn) x = map fn x
+  apply Nothing   _ = Nothing
+  pure = Just
+
+instance Alternative Maybe where
+  empty = Nothing
+  append Nothing  x = x
+  append (Just x) _ = Just x
+
+instance Monad Maybe where
+  bind (Just x) fn = fn x
+  bind Nothing  _  = Nothing
+
+instance MonadPlus Maybe where
+  mzero = Nothing
+  mplus Nothing  x = x
+  mplus (Just x) _ = Just x
+
+instance Foldable Maybe where
+  foldl f init (Just x) = f init x
+  foldl _ init Nothing  = init
+  foldr f init (Just x) = f x init
+  foldr _ init Nothing  = init
+  foldMap f (Just x) = f x
+  foldMap _ Nothing  = mempty
+
+instance Traversable Maybe where
+  traverse f (Just a) = liftA1 Just (f a)
+  traverse f Nothing  = pure Nothing
+  sequence (Just a) = liftA1 Just a
+  sequence Nothing  = pure Nothing
+
+instance Semigroup a => Semigroup (Maybe a) where
+  append Nothing x         = x
+  append x Nothing         = x
+  append (Just a) (Just b) = Just (a <> b)
+
+instance Semigroup a => Monoid (Maybe a) where
+  mempty = Nothing
+
+maybe :: forall a b. b -> (a -> b) -> Maybe a -> b
+maybe b _ Nothing = b
+maybe _ f (Just a) = f a
+
+fromMaybe :: forall a. a -> Maybe a -> a
+fromMaybe a = maybe a identity
+
+isJust :: forall a. Maybe a -> Boolean
+isJust = maybe false (const true)
+
+isNothing :: forall a. Maybe a -> Boolean
+isNothing = maybe true (const false)
+
+fromJust :: forall a. Maybe a -> a
+fromJust (Just a) = a
+fromJust (Nothing) = error "This is Nothing!"

@@ -1,0 +1,32 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Distributed.Slave
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Slave Node controlling module.
+--
+-----------------------------------------------------------------------------
+module Control.Distributed.Slave where
+
+import Control.Monad (IO)
+import Control.Distributed.Node (Node)
+import Network.Inet (Hostname)
+import Data.Unit (Unit)
+import Foreign (ffiIO0)
+
+foreign import start :: Hostname -> IO Node
+foreign import startWith :: Hostname -> String -> IO Node
+foreign import startWithArgs :: Hostname -> String -> String -> IO Node
+
+foreign import startLink :: Hostname -> IO Node
+foreign import startLinkWith :: Hostname -> String -> IO Node
+foreign import startLinkWithArgs :: Hostname -> String -> String -> IO Node
+
+stop :: IO ()
+stop = ffiIO0 :slave :stop

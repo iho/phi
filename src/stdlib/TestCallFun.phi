@@ -1,0 +1,4 @@
+module TestCallFun where
+    
+applyTest :: forall a b. (a -> b) -> a -> b
+applyTest f x = f x

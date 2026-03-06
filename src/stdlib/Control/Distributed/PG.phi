@@ -1,0 +1,49 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Distributed.PG
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Distributed Named Process Groups module.
+--
+-----------------------------------------------------------------------------
+module Control.Distributed.PG where
+
+import Control.Process (Process)
+import Data.Pid (Pid)
+import Data.Unit (Unit)
+
+type Scope = Atom
+
+type Group = String
+
+foreign import startLink :: Process Pid
+
+foreign import startScope :: Scope -> Process Pid
+
+foreign import startLinkScope :: Scope -> Process Pid
+
+foreign import join :: Group -> List Pid -> Process ()
+
+foreign import joinScope :: Scope -> Group -> List Pid -> Process ()
+
+foreign import leave :: Group -> [Pid] -> Process ()
+
+foreign import leaveScope :: Scope -> Group -> [Pid] -> Process ()
+
+foreign import getLocalMembers :: Group -> Process [Pid]
+
+foreign import getLocalMembersIn :: Scope -> Group -> Process [Pid]
+
+foreign import getMembers :: Group -> Process [Pid]
+
+foreign import getMembersIn :: Scope -> Group -> Process [Pid]
+
+foreign import whichGroups :: Process [Group]
+
+foreign import whichGroupsIn :: Scope -> Process [Group]

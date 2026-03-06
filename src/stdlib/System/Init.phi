@@ -1,0 +1,83 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  System.Init
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The System Init module.
+--
+-----------------------------------------------------------------------------
+module System.Init
+  ( Arguments
+  , InternalStatus(..)
+  , Flags
+  , ProvidedStatus
+  , BootMode(..)
+  , boot
+  , getArguments
+  , getArgument
+  , getPlainArguments
+  , restart
+  , restartWith
+  , reboot
+  , stop
+  , stopWith
+  ) where
+
+import Control.Monad (IO)
+import Data.Maybe (Maybe)
+import Data.Unit (Unit)
+import Foreign (ffiIO0, ffiIO1)
+
+type Arguments = [String]
+
+type Flags = [(Atom, Arguments)]
+
+data InternalStatus = Starting | Started | Stopping
+
+type ProvidedStatus = String
+
+data BootMode = Embedded | Interactive
+
+foreign import getArguments :: IO [Flags]
+-- getArguments = ffiIO0 :init :get_arguments
+
+foreign import getArgument
+  :: String -> IO (Maybe Arguments)
+
+getPlainArguments :: IO Arguments
+getPlainArguments = ffiIO0 :init :get_plain_arguments
+
+foreign import getStatus
+  :: IO (InternalStatus, ProvidedStatus)
+
+boot :: [Binary] -> IO ()
+boot = ffiIO1 :init :boot
+
+restart :: IO ()
+restart = ffiIO0 :init :restart
+
+foreign import restartWith :: BootMode -> IO ()
+
+reboot :: IO ()
+reboot = ffiIO0 :init :reboot
+
+stop :: IO ()
+stop = ffiIO0 :init :stop
+
+stopWith :: Integer -> IO ()
+stopWith = ffiIO1 :init :stop
+
+{-
+  halt() -> no_return()
+  halt(Status) -> no_return()
+  halt(Status, Options) -> no_return()
+  Status must be a non-negative integer, a string, or the atom abort.
+    Halts the Erlang runtime system. Has no return value.
+      Depending on Status, the following occurs:
+-}

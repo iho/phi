@@ -1,0 +1,116 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.GenEvent
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The GenEvent Behaviour module.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.GenEvent
+  ( class GenEvent
+  , Init
+  , HandleEvent
+  , handleEvent
+    -- * start/stop
+  , start
+  , startWith
+  , startLink
+  , startLinkWith
+  , stop
+  , stopRef
+  , stopWith
+    -- * api
+  , addHandler
+  , notify
+  , notifyTo
+  , syncNotify
+  , syncNotifyTo
+    -- * init
+  , initOk
+  , initOkHib
+  , initError
+    -- * types
+  , module Control.Behaviour.GenEvent.Types
+  ) where
+
+import Control.Behaviour.GenEvent.Types
+import Control.Monad (pure)
+import Control.Process (ExitReason, Process)
+import Data.Function ((<<<))
+import Data.Pid (Pid)
+import Data.Timeout (Timeout)
+import Data.Unit (Unit)
+import Foreign (ffiIO1, ffiIO2)
+
+-- | Init callback
+type Init st = Process (InitResult st)
+
+-- | HandleEvent callback
+type HandleEvent e st = e -> st -> Process st
+
+class GenEvent e st | e -> st, st -> e where
+  handleEvent :: HandleEvent e st
+
+foreign import start
+  :: forall e st. GenEvent e st => (Init st) -> Process Pid
+
+foreign import startWith
+  :: forall e st. GenEvent e st => Name -> (Init st) -> Process Pid
+
+foreign import startLink
+  :: forall e st. GenEvent e st => (Init st) -> Process Pid
+
+foreign import startLinkWith
+  :: forall e st. GenEvent e st => Name -> (Init st) -> Process Pid
+
+stop :: Name -> Process ()
+stop = ffiIO1 :gen_event :stop
+
+stopPid :: Pid -> Process ()
+stopPid = ffiIO1 :gen_event :stop
+
+foreign import stopRef :: EMgrRef -> Process ()
+
+foreign import stopWith
+  :: EMgrRef -> ExitReason -> Timeout -> Process ()
+
+foreign import addHandler
+  :: forall e st. GenEvent e st
+  => EMgrRef -> (Init st) -> Process ()
+
+notify :: forall e. Name -> e -> Process ()
+notify = ffiIO2 :gen_event :notify
+
+notifyTo :: forall e. Pid -> e -> Process ()
+notifyTo = ffiIO2 :gen_event :notifyTo
+
+foreign import notifyRef
+  :: forall e. EMgrRef -> e -> Process ()
+
+foreign import syncNotify
+  :: forall e. Name -> e -> Process ()
+
+foreign import syncNotifyTo
+  :: forall e. Pid -> e -> Process ()
+
+foreign import syncNotifyRef
+  :: forall e. EMgrRef -> e -> Process ()
+
+-----------------------------------------------------------------------------
+-- | Init result
+-----------------------------------------------------------------------------
+
+initOk :: forall st. st -> Process (InitResult st)
+initOk = pure <<< InitOk
+
+initOkHib :: forall st. st -> Process (InitResult st)
+initOkHib = pure <<< InitOkHib
+
+initError :: forall st. ExitReason -> Process (InitResult st)
+initError = pure <<< InitError

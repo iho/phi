@@ -1,0 +1,73 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  System.File
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The System File module.
+--
+-----------------------------------------------------------------------------
+module System.File
+  ( open
+  , openRaw
+  , read
+  , readLine
+  , seek
+  , tell
+  , write
+  , close
+  , sync
+  , module System.IO.Types
+  , class IsFileName
+  , toFileName
+  , FileName
+  ) where
+
+import Control.Monad (IO)
+import Data.Unit (Unit)
+import System.IO.Types
+  ( FilePath
+  , IODevice
+  , IOMode(..)
+  , SeekMode(..)
+  )
+import Unsafe.Coerce (unsafeCoerce)
+import Foreign (class IsFFI)
+import Data.Term (toTerm, Term)
+
+class IsFileName a where
+  toFileName :: a -> FileName
+
+instance IsFileName [Char] where
+  toFileName = unsafeCoerce
+
+instance IsFileName Binary where
+  toFileName = unsafeCoerce
+
+instance IsFFI FileName Term where
+  toFFI = toTerm
+
+foreign import data FileName :: Type
+
+foreign import open :: FilePath -> IOMode -> IO IODevice
+
+foreign import openRaw :: FilePath -> IOMode -> IO IODevice
+
+foreign import read :: IODevice -> Integer -> IO Binary
+
+foreign import readLine :: IODevice -> IO Binary
+
+foreign import seek :: IODevice -> SeekMode -> Integer -> IO ()
+
+foreign import tell :: IODevice -> IO Integer
+
+foreign import write :: IODevice -> Binary -> IO ()
+
+foreign import close :: IODevice -> IO ()
+
+foreign import sync :: IODevice -> IO ()

@@ -1,0 +1,7 @@
+module TestLet where
+    
+testLet :: forall a. a -> a
+testLet x = 
+    let y = x
+        z = y
+    in z

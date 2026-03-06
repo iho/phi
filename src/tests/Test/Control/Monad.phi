@@ -1,0 +1,102 @@
+module Test.Control.Monad where
+
+import Test.QuickCheck (TestGroup(..), TestResult, quickCheck, quickCheck1)
+import Prelude (Bool, IO, Int, bind, guardF, head, pure, range, seqio, unsafePerformIO, ($), (&&), (+), (==), (>>=), unit, (%))
+import Control.Monad
+
+baseList :: [Int]
+baseList = [1..5]
+
+ioInt :: IO Int
+ioInt = pure 0
+
+pureProp :: Integer->Boolean
+pureProp x = (head $ pure x) == x
+
+ioProp :: Integer->IO Bool
+ioProp x = do
+    y <- pure x
+    pure (y == x)
+
+bindTest :: Boolean
+bindTest = ([1..5] >>= (\x->[x, x])) == [1,1,2,2,3,3,4,4,5,5]
+
+bind'Test :: Boolean
+bind'Test = ((\x -> [x, x]) =<< [1 .. 5]) == [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]
+
+apTest :: Boolean
+apTest = ([\x y z -> x + y + z] `ap` [1] `ap` [1] `ap` [1]) == [3]
+
+liftM1Test :: Boolean
+liftM1Test = (liftM1 (\x->x + 1) baseList) == [2..6]
+
+liftM2Test :: Boolean
+liftM2Test = (liftM2 (\x y->x + y) baseList baseList) == [2,3,4,5,6,3,4,5,6,7,4,5,6,7,8,5,6,7,8,9,6,7,8,9,10]
+
+liftM3Test :: Boolean
+liftM3Test = (liftM3 (\x y z-> x + y + z) [1] [1] []) == []
+
+liftM4Test :: Boolean
+liftM4Test = (liftM4 (\x y z t->x+y+z+t) [1] [1] [1] [1]) == [4]
+
+guardTest :: Boolean
+guardTest = (guard true ) == [()] && 
+            (guard false) == [  ]
+
+msumTest :: Boolean
+msumTest = (msum [[1], [2], [3]]) == [1, 2, 3]
+
+mfilterTest :: Boolean
+mfilterTest = (mfilter (\x -> x % 2 == 1) [1, 3, 4]) == [1, 3]
+
+guardFTest :: Boolean
+guardFTest = ((guardF true) == [true]) && ((guardF false) == [])
+
+whenTest :: Boolean
+whenTest = when true  [(), ()] == [(), ()] &&
+           when false [(), ()] == [()]
+
+unlessTest :: Boolean
+unlessTest = unless true  [(), ()] == [()] &&
+             unless false [(), ()] == [(), ()]
+
+joinTest :: Boolean
+joinTest = join [[1, 2], [3]] == [1, 2, 3]
+
+filterMTest :: Boolean
+filterMTest = filterM (\_ -> [true, false]) [1, 2, 3] == [[1,2,3],[1,2],[1,3],[1],[2,3],[2],[3],[]]
+
+foldMTest :: Boolean
+foldMTest = foldM (\a b -> [a, b]) 0 [1, 2, 3] == [0,3,2,3,1,3,2,3]
+
+unsafePerformIOTest :: Boolean
+unsafePerformIOTest = (unsafePerformIO ioInt) == 0
+
+seqioTest :: IO Bool
+seqioTest = do
+    xs <- seqio (liftM1 pure baseList)
+    pure (xs == baseList) 
+
+test :: TestGroup (Integer -> IO TestResult)
+test = Exe [
+    quickCheck "pureProp" pureProp
+   ,quickCheck1 "ioProp" ioProp
+   ,quickCheck "bindTest" bindTest
+   ,quickCheck1 "bind'Test" bind'Test
+   ,quickCheck1 "apTest" apTest
+   ,quickCheck "liftM1" liftM1Test
+   ,quickCheck "liftM2Test" liftM2Test
+   ,quickCheck "liftM3Test" liftM3Test
+   ,quickCheck "liftM4Test" liftM4Test
+   ,quickCheck1 "guardTest" guardTest
+   ,quickCheck1 "msumTest" msumTest
+   ,quickCheck1 "mfilterTest" mfilterTest
+   ,quickCheck "guardFTest" guardFTest
+   ,quickCheck1 "whenTest" whenTest
+   ,quickCheck1 "unlessTest" unlessTest
+   ,quickCheck1 "joinTest" joinTest
+   ,quickCheck1 "filterMTest" filterMTest
+   ,quickCheck1 "foldMTest" foldMTest
+   ,quickCheck "unsafePerformIOTest" unsafePerformIOTest
+   ,quickCheck1 "seqioTest" seqioTest
+]

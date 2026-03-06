@@ -1,0 +1,118 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Behaviour.Supervisor
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Supervisor Behaviour.
+--
+-----------------------------------------------------------------------------
+module Control.Behaviour.Supervisor
+  ( -- * start sup
+    startSup
+  , startSupWith
+    -- * child api
+  , checkChildSpecs
+  , countChildren
+  , deleteChild
+  , getChildSpec
+  , restartChild
+  , startChild
+  , terminateChild
+  , terminateChildBy
+  , whichChildren
+    -- * init result
+  , Init
+  , initOk
+  , initIgnore
+    -- * child spec
+  , childSpec
+  , supChildSpec
+  , module Control.Behaviour.Supervisor.Types
+  ) where
+
+import Control.Behaviour.Supervisor.Types
+import Control.Monad (pure)
+import Control.Process (Process)
+import Data.Pid (Pid)
+import Data.Maybe (Maybe)
+import Data.Result (Result)
+import Data.Unit (Unit)
+
+-- | Init callback
+type Init = Process InitResult
+
+-- Start a supervisor process.
+foreign import startSup :: Init -> Process Pid
+
+-- Start a supervisor with name.
+foreign import startSupWith :: Name -> Init -> Process Pid
+
+-- Check a list of child specification.
+foreign import checkChildSpecs
+  :: [ChildSpec] -> Process (Result ChildSpecError ())
+
+-- Return counts of children.
+foreign import countChildren
+  :: SupRef -> Process ChildCounts
+
+-- Delete the child specification identified by Id.
+foreign import deleteChild
+  :: SupRef -> ChildId -> Process (Result ChildError ())
+
+-- Get the child spec for the child identified by Id.
+foreign import getChildSpec
+  :: SupRef -> ChildId -> Process (Maybe ChildSpec)
+
+-- Restart a child process.
+foreign import restartChild
+  :: SupRef -> ChildId -> Process (Result ChildError Child)
+
+-- Start a child process.
+foreign import startChild
+  :: SupRef -> ChildSpec -> Process (Result ChildError ChildPid)
+
+-- Terminate a child process.
+foreign import terminateChild
+  :: SupRef -> ChildId -> Process (Result ChildError ())
+
+-- Terminate a child process by Pid.
+foreign import terminateChildBy
+  :: SupRef -> Pid -> Process (Result ChildError ())
+
+foreign import whichChildren :: SupRef -> Process [ChildId]
+
+childSpec :: ChildId -> Process Pid -> ChildSpec
+childSpec childId startFun =
+  { childId = childId
+  , startFun = startFun
+  , restart = Permanent
+  , shutdown = Shutdown 5000
+  , childType = Worker
+  , modules = []
+  }
+
+supChildSpec :: ChildId -> Process Pid -> ChildSpec
+supChildSpec childId startFun =
+  { childId = childId
+  , startFun = startFun
+  , restart = Permanent
+  , shutdown = Infinity
+  , childType = Supervisor
+  , modules = []
+  }
+
+-----------------------------------------------------------------------------
+-- | Init result
+-----------------------------------------------------------------------------
+
+initOk :: SupFlags -> [ChildSpec] -> Process InitResult
+initOk flags specs = pure (InitOk flags specs)
+
+initIgnore :: Process InitResult
+initIgnore = pure InitIgnore

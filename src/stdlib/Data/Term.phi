@@ -1,0 +1,27 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Term
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Term datatype ^_^
+--
+-----------------------------------------------------------------------------
+module Data.Term where
+
+import Unsafe.Coerce (unsafeCoerce)
+
+-- | A piece of data of any datatype is called a Term in Erlang.
+-- we use Term as top type of Hamler
+foreign import data Term :: Type
+
+toTerm :: forall a. a -> Term
+toTerm = unsafeCoerce
+
+fromTerm :: forall a. Term -> a
+fromTerm = unsafeCoerce

@@ -1,0 +1,118 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Either
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Either datatype.
+--
+-----------------------------------------------------------------------------
+module Data.Either
+  ( Either(..)
+  , either
+  , isLeft
+  , isRight
+  , fromLeft
+  , fromRight
+  , note
+  , hush
+  ) where
+
+import Control.Monad (class Applicative, class Monad, pure, liftA1)
+import Data.Monoid (mempty)
+import Data.Functor (class Functor, map)
+import Data.Foldable (class Foldable)
+import Data.Traversable (class Traversable)
+import Data.Function (error, const)
+import Data.Maybe (Maybe(..), maybe)
+import Data.Show (class Show, show)
+import Data.Read (class Read, read)
+import Data.List ((++))
+import Data.Eq (class Eq, eq)
+import Data.Ord (class Ord, compare)
+import Data.Ordering (Ordering(..))
+import Data.Semigroup (class Semigroup)
+
+data Either a b = Left a | Right b
+
+instance Functor (Either e) where
+  map fn (Right x) = Right (fn x)
+  map _  (Left e)  = Left e
+
+instance Applicative (Either e) where
+  apply (Right fn) x = map fn x
+  apply (Left e)   _ = Left e
+  pure = Right
+
+instance Monad (Either e) where
+  bind (Right x) k = k x
+  bind (Left e)  _ = Left e
+
+instance (Show a, Show b) => Show (Either a b) where
+  show (Left x) = "Left " ++ show x
+  show (Right x) = "Right " ++ show x
+
+instance (Read a, Read b) => Read (Either a b) where
+  read ['L'|['e'|['f'|['t'|[' '|xs]]]]] = Left (read xs)
+  read ['R'|['i'|['g'|['h'|['t'|[' '|xs]]]]]] = Right (read xs)
+  read _ = error "not a Either"
+
+instance (Eq a, Eq b) => Eq (Either a b) where
+  eq (Left x) (Left y) = eq x y
+  eq (Right x) (Right y) = eq x y
+  eq _ _ = false
+
+instance (Ord a, Ord b) => Ord (Either a b) where
+  compare (Left _) (Right _) = LT
+  compare (Right _) (Left _) = GT
+  compare (Left x) (Left y) = compare x y
+  compare (Right x) (Right y) = compare x y
+
+instance Semigroup (Either a b) where
+  append (Right x) _ = Right x
+  append _         x = x
+
+instance Foldable (Either a) where
+  foldl f init (Right x) = f init x
+  foldl _ init (Left  _) = init
+  foldr f init (Right x) = f x init
+  foldr _ init (Left  _) = init
+  foldMap f (Right x) = f x
+  foldMap _ (Left  _) = mempty
+
+instance Traversable (Either a) where
+  traverse f (Right x) = liftA1 Right (f x)
+  traverse _ (Left  x) = pure (Left x)
+  sequence (Right x) = liftA1 Right x
+  sequence (Left  x) = pure (Left x)
+
+either :: forall a b c. (a -> c) -> (b -> c) -> Either a b -> c
+either f _ (Left a)  = f a
+either _ g (Right b) = g b
+
+isLeft :: forall a b. Either a b -> Boolean
+isLeft (Left _) = true
+isLeft _        = false
+
+isRight :: forall a b. Either a b -> Boolean
+isRight (Right _) = true
+isRight _         = false
+
+fromLeft :: forall a b. Either a b -> a
+fromLeft (Left a) = a
+fromLeft (Right x) = error "Right"
+
+fromRight :: forall a b. Either a b -> b
+fromRight (Right a) = a
+fromRight (Left x) = error "Left"
+
+note :: forall a b. a -> Maybe b -> Either a b
+note a = maybe (Left a) Right
+
+hush :: forall a b. Either a b -> Maybe b
+hush = either (const Nothing) Just

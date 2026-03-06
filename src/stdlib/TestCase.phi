@@ -1,0 +1,13 @@
+module TestCase where
+
+testCase :: Int -> Atom
+testCase n = case n of
+    1 -> One
+    2 -> Two
+    _ -> Other
+
+testTuple :: (Int, Int) -> Int
+testTuple t = case t of
+    (1, x) -> x
+    (x, 1) -> x
+    (x, y) -> x + y

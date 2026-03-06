@@ -1,0 +1,201 @@
+module Test.Database.Mnesia where
+
+import Prelude (IO, Unit, bind, discard, length, map, pure, replicate, println, showAny, seqio, unit, zip, ($), (+), (-), (/), (==), error, (<))
+import Database.ETS (TableType(..))
+import Database.Mnesia (createSchema, createTable, dirtyRead, dirtyAllKeys, dirtyWrite, start)
+import Database.Mnesia as M
+import Test.QuickCheck (TestGroup(..), TestResult, pick, quickCheck, quickCheck1)
+import System.Dir (deleteDirRecursively)
+import System.FilePath (isDir)
+import Data.Term.Persistent as P
+import System.Random (randomRIO)
+import Data.List (member)
+
+test :: TestGroup (Integer -> IO TestResult)
+test = Exe [ quickCheck1 "start " mstart
+           , quickCheck1 "insert dept" insertDept
+           , quickCheck1 "insert project" insertProject
+           , quickCheck  "insert employee" insertEmployee
+           , quickCheck1 "insert manager" insertManager
+           , quickCheck1  "raise all" raiseAll
+           , quickCheck1  "raise females" raiseFemales
+           , quickCheck1 "stop" mstop
+           ]
+
+employee :: M.TableOptions
+employee = { tableType = Set
+           , attributes = [:emp_no, :name, :age, :salary, :sex]
+           , ramCopies = []
+           , recordName = :employee
+           }
+
+dept :: M.TableOptions
+dept = { tableType = Set
+       , attributes = [:id, :name]
+       , ramCopies = []
+       , recordName = :dept
+       }
+
+project :: M.TableOptions
+project = { tableType = Set
+          , attributes = [:name, :number]
+          , ramCopies = []
+          , recordName = :project
+          }
+
+manager :: M.TableOptions
+manager = { tableType = Bag
+          , attributes = [:emp, :dept]
+          , ramCopies = []
+          , recordName = :manager
+          }
+
+atDep :: M.TableOptions
+atDep = { tableType = Set
+        , attributes = [:emp, :dept_id]
+        , ramCopies = []
+        , recordName = :atDep
+        }
+
+inProj :: M.TableOptions
+inProj = { tableType = Bag
+         , attributes = [:proj_name, :emp]
+         , ramCopies = []
+         , recordName = :inProj
+         }
+
+mstart :: IO Boolean
+mstart = do
+  v0 <- isDir "Mnesia.nonode@nohost"
+  if v0
+     then deleteDirRecursively "Mnesia.nonode@nohost"
+     else pure ()
+  createSchema []
+  start
+  P.put :employee 0
+  P.put :dept 0
+  P.put :project 0
+
+  createTable :employee employee
+  createTable :dept     dept
+  createTable :project  project
+  createTable :manager  manager
+  createTable :atDep    atDep
+  createTable :inProj   inProj
+  pure true
+
+insertDept :: [String] -> IO Boolean
+insertDept [] = insertDept ["tatat", "tbababa"]
+insertDept xs = do
+  seqio [ do
+           v <- P.get :dept
+           P.put :dept (v+1)
+           dirtyWrite :dept (:dept, v,  name)
+        | name <- xs]
+  pure true
+
+insertProject :: [String] -> IO Boolean
+insertProject [] = insertProject ["balan", "cbdlec"]
+insertProject [_] = insertProject ["balan", "cbdlec"]
+insertProject xs = do
+  seqio [ do
+           v <- P.get :project
+           P.put :project (v+1)
+           dirtyWrite :project (:project, if name == [] then "empty" else name,  v)
+        | name <- xs]
+  pure true
+
+randomNL :: Integer -> Integer -> [Integer] -> IO [Integer]
+randomNL 0 max list = pure list
+randomNL num max list = do
+  v <- randomRIO 0 max
+  if v `member` list
+     then randomNL num max list
+     else randomNL (num-1) max [v|list]
+
+sels :: Float -> IO Atom
+sels i = do
+  v <- randomRIO 0.0 1.0
+  if v < i
+     then pure :females
+     else pure :males
+
+insertEmployee :: [(String, (Integer, Integer))] -> IO Boolean
+insertEmployee xs = do
+  seqio [ do
+           v <- P.get :employee
+           P.put :employee (v+1)
+           sv <- sels 0.01
+           dirtyWrite :employee (:employee, v, n ,20 + a, 100 + s, sv)
+
+           allk <- dirtyAllKeys :project
+           let len = length allk
+           rProjN <- randomRIO 0 len
+           let rProjN' = rProjN / 2 + 1
+           nList <- randomNL rProjN' len []
+           let tval = zip (replicate len 1) allk
+           seqio [dirtyWrite :inProj (:inProj, (pick n' tval), v) | n' <- nList ]
+
+           depv <- dirtyAllKeys :dept
+           let lenv = length depv
+           vv <- randomRIO 0 lenv
+           let pnamev = pick vv $ zip (replicate lenv 1) depv
+           dirtyWrite :atDep (:atDep, v, pnamev)
+        | (n, (a, s)) <- xs]
+  pure true
+
+insertManager :: IO Boolean
+insertManager = do
+  totalEmploy <- dirtyAllKeys :employee
+  let lenEmp = length totalEmploy
+  totalDept <- dirtyAllKeys :dept
+  let lenDept = length totalDept
+  nList <- randomNL lenDept lenEmp []
+  let numList = map (\x -> x-1) nList
+  seqio [dirtyWrite :manager (:manager, e, d) | (e,d) <- zip numList totalDept ]
+  pure true
+
+raiseAll :: IO Boolean
+raiseAll = do
+  allEmploy <- dirtyAllKeys :employee
+  -- showFemales
+  seqio [ do
+           xs <- dirtyRead :employee id
+           case xs of
+             [(a,b,c,d,e,f)] -> dirtyWrite :employee (a,b,c,d, e+1,f)
+             _ -> error "strange happened"
+        | id <- allEmploy ]
+  pure true
+
+raiseFemales :: IO Boolean
+raiseFemales = M.transaction $ do
+  vs <- M.matchObject (:employee, :_, :_, :_, :_, :females )
+  seqio [ M.write (a,b,c,d,e+30,f)
+        | (a,b,c,d,e,f) <- vs ]
+  pure true
+
+mstop :: IO Boolean
+mstop = do
+  -- M.info
+  -- M.stop
+  -- showFemales
+  v0 <- isDir "Mnesia.nonode@nohost"
+  if v0
+     then deleteDirRecursively "Mnesia.nonode@nohost"
+     else pure ()
+  pure true
+
+showAll :: Atom -> IO ()
+showAll name = do
+  v <- dirtyAllKeys name
+  seqio [ do
+          vv <- dirtyRead name pname
+          println $ showAny vv
+        | pname <- v]
+  pure ()
+
+showFemales :: IO ()
+showFemales = do
+  vs <- M.transaction $ M.matchObject (:employee, :_, :_, :_, :_, :females )
+  println $ showAny vs
+

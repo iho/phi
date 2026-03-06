@@ -1,0 +1,72 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Eq
+-- Copyright   :  (c) 2020-2021 EMQ Technologies Co., Ltd.
+-- License     :  BSD-style (see the LICENSE file)
+--
+-- Maintainer  :  Feng Lee, feng@emqx.io
+--                Yang M, yangm@emqx.io
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- The Eq typeclass.
+--
+-----------------------------------------------------------------------------
+module Data.Eq
+  ( class Eq
+  , eq, (==)
+  , notEq, (/=)
+  ) where
+
+import Data.Unit (Unit)
+import Data.Bool ((&&))
+
+class Eq a where
+  eq :: a -> a -> Boolean
+
+infix 4 eq as ==
+
+notEq :: forall a. Eq a => a -> a -> Boolean
+notEq x y = (x == y) == false
+
+infix 4 notEq as /=
+
+instance Eq Atom where
+  eq = eqAtomImpl
+
+instance Eq Boolean where
+  eq = eqBoolImpl
+
+instance Eq Binary where
+  eq = eqBinImpl
+
+instance Eq Char where
+  eq = eqCharImpl
+
+instance Eq Integer where
+  eq = eqIntImpl
+
+instance Eq Float where
+  eq = eqFloatImpl
+
+instance Eq a => Eq (List a) where
+  eq = eqListImpl
+
+instance (Eq a, Eq b) => Eq (a, b) where
+  eq (a, b) (c, d) = a == c && b == d
+
+instance Eq Unit where
+  eq _ _ = true
+
+instance Eq (a -> b) where
+  eq = eqFunImpl
+
+foreign import eqAtomImpl :: Atom -> Atom -> Boolean
+foreign import eqBoolImpl :: Boolean -> Boolean -> Boolean
+foreign import eqBinImpl :: Binary -> Binary -> Boolean
+foreign import eqCharImpl :: Char -> Char -> Boolean
+foreign import eqIntImpl :: Integer -> Integer -> Boolean
+foreign import eqFloatImpl :: Float -> Float -> Boolean
+foreign import eqStringImpl :: String -> String -> Boolean
+foreign import eqListImpl :: forall a. List a -> List a -> Boolean
+foreign import eqFunImpl :: forall a b. (a -> b) -> (a -> b) -> Boolean

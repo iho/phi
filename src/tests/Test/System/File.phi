@@ -1,0 +1,40 @@
+module Test.System.File where
+
+import Test.QuickCheck (TestGroup(..), TestResult, quickCheck1)
+import Prelude (IO, bind, discard, pure, ($), (&&), (==), (-))
+import System.File (IOMode(..), SeekMode(..), close, open, openRaw, read, readLine, seek, tell, write, sync)
+
+fileOper :: IO Boolean
+fileOper = do
+  i <- open ".test/tababab" ReadWriteMode
+  write i <<"bbaaaaa">>
+  v0 <- tell i                       --  7
+  seek i AbsoluteSeek 0
+  v1 <- read i 2                     -- <<"bb">>
+  close i
+  pure $ v0 == 7 && v1 == <<"bb">>
+
+propReadLine :: IO Boolean
+propReadLine = do
+  i <- open ".test/test" ReadWriteMode
+  write i <<"aa\nbb">>
+  sync i
+  seek i RelativeSeek (0 - 5)
+  v0 <- readLine i
+  close i
+  pure $ v0 == <<"aa\n">>
+
+propOpenRaw :: IO Boolean
+propOpenRaw = do
+  i <- openRaw ".test/test" ReadWriteMode
+  write i <<"bbaaa">>
+  seek i AbsoluteSeek 0
+  v0 <- read i 2
+  close i
+  pure $ v0 == <<"bb">>
+
+test :: TestGroup (Integer -> IO TestResult)
+test = Exe [ quickCheck1 "file open, write, seek, read, close" fileOper
+           , quickCheck1 "readLine, sync" propReadLine
+           , quickCheck1 "openRaw" propOpenRaw
+           ]
