@@ -165,16 +165,22 @@ fn main() {
             let _ = fs::remove_dir_all(ffi_src_dir);
             let _ = fs::create_dir_all(ffi_src_dir);
 
-            // Copy all .hrl files from src/stdlib to ffi_src_dir/ preserving just filenames
-            for entry in WalkDir::new("src/stdlib").into_iter().filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if path.extension().map(|s| s == "hrl").unwrap_or(false) {
-                    if let Some(filename) = path.file_name() {
-                        let dest = ffi_src_dir.join(filename);
-                        let _ = fs::copy(path, dest);
-                    }
+            let ffi_src_dir = ffi_src_dir.to_path_buf();
+
+            // Collect all .hrl files from src/stdlib and copy them into ffi_src_dir/ in parallel.
+            let hrl_paths: Vec<PathBuf> = WalkDir::new("src/stdlib")
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().map(|s| s == "hrl").unwrap_or(false))
+                .map(|e| e.path().to_path_buf())
+                .collect();
+
+            hrl_paths.par_iter().for_each(|src| {
+                if let Some(filename) = src.file_name() {
+                    let dest = ffi_src_dir.join(filename);
+                    let _ = fs::copy(src, dest);
                 }
-            }
+            });
 
             // Collect all companion Phi.*.erl paths
             let companion_paths: Vec<PathBuf> = search_paths.iter().flat_map(|base| {
@@ -186,47 +192,53 @@ fn main() {
                     .collect::<Vec<_>>()
             }).collect();
 
-            // Copy companion .erl files into ffi_src_dir/ root.
-            for src in &companion_paths {
+            // Copy companion .erl files into ffi_src_dir/ root in parallel.
+            companion_paths.par_iter().for_each(|src| {
                 if let Some(filename) = src.file_name() {
                     let dest = ffi_src_dir.join(filename);
                     let _ = fs::copy(src, dest);
                 }
-            }
+            });
 
-            // Rewrite includes in ffi_src_dir
-            for entry in WalkDir::new(ffi_src_dir).into_iter().filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if path.is_file() && (path.extension().map(|s| s == "erl" || s == "hrl").unwrap_or(false)) {
-                    let content = fs::read_to_string(path).unwrap_or_default();
-                    let mut lines: Vec<String> = Vec::new();
-                    let mut changed = false;
-                    for line in content.lines() {
-                        if line.trim().starts_with("-include(") {
-                            if let Some(start) = line.find('"') {
-                                if let Some(end) = line.rfind('"') {
-                                    let path_str = &line[start+1..end];
-                                    if let Some(filename) = Path::new(path_str).file_name() {
-                                        let new_include = format!("-include(\"{}\").", filename.to_string_lossy());
-                                        if line.trim() != new_include {
-                                            lines.push(new_include);
-                                            changed = true;
-                                            continue;
-                                        }
+            // Rewrite includes in ffi_src_dir in parallel.
+            let rewrite_paths: Vec<PathBuf> = WalkDir::new(&ffi_src_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .map(|e| e.path().to_path_buf())
+                .filter(|path| {
+                    path.is_file() && path.extension().map(|s| s == "erl" || s == "hrl").unwrap_or(false)
+                })
+                .collect();
+
+            rewrite_paths.par_iter().for_each(|path| {
+                let content = fs::read_to_string(path).unwrap_or_default();
+                let mut lines: Vec<String> = Vec::new();
+                let mut changed = false;
+                for line in content.lines() {
+                    if line.trim().starts_with("-include(") {
+                        if let Some(start) = line.find('"') {
+                            if let Some(end) = line.rfind('"') {
+                                let path_str = &line[start+1..end];
+                                if let Some(filename) = Path::new(path_str).file_name() {
+                                    let new_include = format!("-include(\"{}\").", filename.to_string_lossy());
+                                    if line.trim() != new_include {
+                                        lines.push(new_include);
+                                        changed = true;
+                                        continue;
                                     }
                                 }
                             }
                         }
-                        lines.push(line.to_string());
                     }
-                    if changed {
-                        let _ = fs::write(path, lines.join("\n"));
-                    }
+                    lines.push(line.to_string());
                 }
-            }
+                if changed {
+                    let _ = fs::write(path, lines.join("\n"));
+                }
+            });
 
             // Compile all .erl files from ffi_src_dir
-            let rewritten_erls: Vec<PathBuf> = WalkDir::new(ffi_src_dir)
+            let rewritten_erls: Vec<PathBuf> = WalkDir::new(&ffi_src_dir)
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().extension().map(|s| s == "erl").unwrap_or(false))
@@ -235,27 +247,36 @@ fn main() {
 
             ffi_total_ctr.store(rewritten_erls.len(), Ordering::Relaxed);
 
-            rewritten_erls.par_iter().for_each(|erl_path| {
-                let out = Command::new("erlc")
+            if !rewritten_erls.is_empty() {
+                let mut erlc = Command::new("erlc");
+                erlc
                     .arg("-W0")
                     .arg("-o").arg("ebin")
-                    .arg("-I").arg(ffi_src_dir)
-                    .arg(erl_path)
-                    .output();
+                    .arg("-I").arg(&ffi_src_dir);
 
-                match out {
+                for erl_path in &rewritten_erls {
+                    erlc.arg(erl_path);
+                }
+
+                match erlc.output() {
                     Ok(o) if o.status.success() => {
-                        ffi_ok_ctr.fetch_add(1, Ordering::Relaxed);
-                        let _ = fs::remove_file(erl_path);
+                        ffi_ok_ctr.store(rewritten_erls.len(), Ordering::Relaxed);
+                        for erl_path in &rewritten_erls {
+                            let _ = fs::remove_file(erl_path);
+                        }
                     }
-                    Ok(_) => {
-                        ffi_fail_ctr.fetch_add(1, Ordering::Relaxed);
+                    Ok(o) => {
+                        ffi_fail_ctr.store(rewritten_erls.len(), Ordering::Relaxed);
+                        if !o.stderr.is_empty() {
+                            eprintln!("ffi erlc failed:\n{}", String::from_utf8_lossy(&o.stderr));
+                        }
                     }
-                    Err(_) => {
-                        ffi_fail_ctr.fetch_add(1, Ordering::Relaxed);
+                    Err(err) => {
+                        ffi_fail_ctr.store(rewritten_erls.len(), Ordering::Relaxed);
+                        eprintln!("failed to run erlc for ffi companions: {err}");
                     }
                 }
-            });
+            }
         })
     };
 
