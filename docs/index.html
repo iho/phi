@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Φ — Native PureScript for Erlang VM</title>
+    <link rel="stylesheet" href="index.css?v=5">
+</head>
+<body>
+    <nav class="sticky">
+        <div class="nav-container">
+            <a href="index.html" class="logo">Ф</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Language</a></li>
+                <li><a href="library.html">Library</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <header>
+        <div class="hero-content">
+            <h1>Phi</h1>
+            <p class="hero-subtitle">Algebraic pure functional language <b>Phi</b>,
+            implementing <b>PureScript</b> and <b>Hamler</b> syntax and sematics,
+            rewritten in <b>Elixir</b> for <b>Erlang/OTP</b> concurrency model.
+             <!--Алгебраїчна чиста функціональна мова програмування Phi, яка реалізує синтаксис і семантику PureScript,
+                                     написана на Elixir для телекомунікаційної платформи <b>Erlang</b>.--></p>
+            <div style="float:inline;align:center;margin-left:-23px;" class="code-snippet">module Main where
+
+import Prelude
+import Effect.Console (log)
+
+main :: Effect Unit
+main = do
+    log "Hello, Phi!"
+    log "Strongly-typed • Concurrent • Distributed"</div>
+        </div>
+        </div>
+    </header>
+
+    <main>
+        <section>
+            <h2>Features</h2>
+            <div class="product-grid">
+                <div class="product-card">
+                    <h3>Power &amp; Beauty</h3>
+                    <p>Write pure functional code. Compile to highly scalable, fault-tolerant Erlang bytecode.</p>
+                </div>
+                <div class="product-card">
+                    <h3>Full Type Safety</h3>
+                    <p>Compile-time type checking and inference. Algebraic data types, pattern matching, type classes.</p>
+                </div>
+                <div class="product-card">
+                    <h3>Effectful Concurrency</h3>
+                    <p>Actors, OTP behaviours, supervision trees — all with PureScript syntax.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Announcement</h2>
+            <div style="max-width:720px;margin:0 auto;">
+                <pre class="code-snippet">
+$ mix deps.get
+$ mix phi.repl
+Phi Interactive REPL
+Type :quit to exit, :reset to clear bindings
+Library loaded. Ready.
+ф> import Control.Process
+ф> getSelf
+#PID&lt;0.94.0&gt;
+ф> import Control.Application
+ф> loadedApplications
+[
+  %{name: :logger, vsn: ~c"1.18.4", desc: ~c"logger"},
+  %{name: :mix, vsn: ~c"1.18.4", desc: ~c"mix"},
+  %{name: :iex, vsn: ~c"1.18.4", desc: ~c"iex"},
+  %{name: :phi, vsn: ~c"0.3.1", desc: ~c"The Phi Programming Language",
+  %{name: :ex_unit, vsn: ~c"1.18.4"', desc: ~c"ex_unit"},
+  %{name: :stdlib, vsn: ~c"7.0.2", desc: ~C"ERTS CXC 138 10"},
+  %{name: :crypto, vsn: ~c"5.6"', desc: ~c "CRYPTO" },
+  %{name: :compiler, vsn: ~c"9.0.1", desc: ~C"ERTS CXC 138 10"},
+  %{name: :elixir, vsn: ~c"1.18.4", desc: ~c"elixir"},
+  %{name: :kernel, vsn: ~C"10.3.2"', desc: ~C"ERTS CXC 138 10"}
+]
+</pre>
+            </div>
+        </section>
+        <section>
+            <h2>Properties</h2>
+            <div style="max-width:720px;margin:0 auto;">
+• Functional programming<br>
+• Functions, higher-order functions<br>
+• Algebraic data type (ADT)<br>
+• PureScript syntax and Hamler base library<br>
+• Compilation of base library in seconds<br>
+• Compile-time type checkig and inference<br>
+• Currying and partial application<br>
+• Pattern matching, and effective guards<br>
+• List comprehension<br>
+• Featured Absence of HKT<br>
+• Applicative and Monad<br>
+• Advanced module system<br>
+• Built-in concurrency<br>
+            </div>
+        </section>
+
+        <section>
+            <h2>Credits</h2>
+            <div style="max-width:720px;margin:0 auto;">
+This language was created by non-human impersonated spirits of these guys representing canonical lineage:<br><br>
+
+• Prolog Team (Alain Colmerauer with Philippe Roussel)<br>
+• ML/LCF Team (Robin Milner)<br>
+• Miranda Team (David Turner)<br>
+• Haskell Team (Simon Peyton Jones)<br>
+• Erlang Team (Joe Armstrong)<br>
+• PureScript Team (Phil Freeman)<br>
+• Elixir Team (José Valim)<br>
+• Hamler Team (Feng Lee)<br>
+</div>
+
+        </section>
+
+    <section class="section-standards">
+        <h2>Open Source</h2>
+        <center>
+          <a href="https://github.com/synrc/phi">
+         </center>
+    </section>
+
+    </main>
+
+    <footer>
+        <div class="footer-columns">
+            <div>
+                <h4>Phi</h4>
+                <p>PureScript written in Elixir for Erlang/OTP</p>
+            </div>
+            <div>
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="library.html">Base Library</a></li>
+                    <li><a href="https://github.com/iho/phi">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

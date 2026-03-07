@@ -452,10 +452,21 @@ impl BeamModule {
             self.code_buf.push(b1);
             self.code_buf.push(b2);
         } else {
-            // Values ≥ 2048: 4-byte extended form
-            // byte1 = tag | 0x18,  then 4 bytes big-endian value
-            self.code_buf.push(tag | 0x18);
-            self.code_buf.extend_from_slice(&(value as u32).to_be_bytes());
+            // Values ≥ 2048: variable-length big-endian multi-byte form.
+            // b0 = tag | (len_code << 5) | 0x18, followed by `count` bytes.
+            // Decoder reads count = len_code + 2 bytes; len_code is stored in b0 bits 5-7.
+            let count: u32 = if value <= 0xFFFF { 2 }
+                else if value <= 0xFF_FFFF { 3 }
+                else if value <= 0xFFFF_FFFF { 4 }
+                else if value <= 0xFF_FFFF_FFFF { 5 }
+                else if value <= 0xFFFF_FFFF_FFFF { 6 }
+                else if value <= 0xFF_FFFF_FFFF_FFFF { 7 }
+                else { 8 };
+            let len_code = (count - 2) as u8;
+            self.code_buf.push(tag | (len_code << 5) | 0x18);
+            for i in (0..count).rev() {
+                self.code_buf.push((value >> (i * 8)) as u8);
+            }
         }
     }
 
@@ -565,7 +576,7 @@ impl BeamModule {
     fn patch_alloc_size(&mut self, offset: usize, stack_size: u32) {
         let v = stack_size as u64;
         // Always write as 2-byte compact form (supports values 0..2047).
-        self.code_buf[offset]     = (((v >> 3) & !7) as u8) | TAG_U | 8;
+        self.code_buf[offset]     = (((v >> 3) & 0xE0u64) as u8) | TAG_U | 8;
         self.code_buf[offset + 1] = (v & 0xFF) as u8;
     }
 
@@ -906,9 +917,12 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                 emit_pattern_check(&mut beam, binder, x_reg, lam_fail_label, &mut ctx)?
             }
 
-            // Bind free variables to X registers after parameters
+            // Bind free variables to X registers after parameters.
+            // In BEAM, when call_fun invokes a closure: X(0..user_arity-1) = explicit args,
+            // X(user_arity..total_arity-1) = free vars extracted from the fun object.
+            let user_arity = item.arity - item.num_free;
             for (i, var) in free_vars_list.iter().enumerate() {
-                ctx.vars.insert(var.clone(), Reg::X(item.arity + i as u32));
+                ctx.vars.insert(var.clone(), Reg::X(user_arity + i as u32));
             }
 
             emit_expr(&mut beam, &body, &mut ctx, Reg::X(0))?;
@@ -1713,7 +1727,7 @@ fn emit_expr(
                 return Ok(());
             }
 
-            println!("  [beam_writer] emit_expr Var failed lookup: '{}' (resolved: '{}'). ctx.vars: {:?}", name, resolved, ctx.vars.keys());
+            println!("  [beam_writer] emit_expr Var failed lookup: '{}' (resolved: '{}')", name, resolved);
             Err(BeamGenError::Internal("var_lookup_failed"))
         }
 

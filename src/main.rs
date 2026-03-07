@@ -69,88 +69,13 @@ fn main() {
     println!("\nSummary: {}/{} files parsed successfully.", success_count, total_count);
 
     // -----------------------------------------------------------------------
-    // Pass 2: Typechecking (sequential env build, then parallel check)
+    // Start FFI generation early to overlap with typechecking and direct BEAM emission
     // -----------------------------------------------------------------------
-    println!("\n--- Typechecking ---");
-    let mut current_env = env::Env::new();
+    println!("\n--- Starting FFI staging in parallel ---");
 
-    // Sequential: build_env mutates shared state
-    for module in &modules {
-        typechecker::build_env(module, &mut current_env);
-    }
-
-    // Inject implicit Prelude imports (and other stdlib functions)
-    // We treat every qualified binding 'Mod.Name' as a potential alias 'Name' -> 'Mod.Name'
-    // if Mod is a standard library module.
-    let stdlib_aliases: Vec<(String, String)> = current_env.bindings.keys()
-        .filter(|k| k.contains('.'))
-        .map(|k| {
-            let dot = k.rfind('.').unwrap();
-            (k[dot+1..].to_string(), k.clone())
-        })
-        .collect();
-    
-    for (k, v) in stdlib_aliases {
-        // Only inject if it doesn't conflict or if it's from a common module
-        if !current_env.term_aliases.contains_key(&k) {
-            current_env.term_aliases.insert(k, v);
-        }
-    }
-
-    let shared_env = Arc::new(current_env);
-
-    // Parallel typecheck — each module gets an independent fresh State; env is Arc<Env> (read-only).
-    let tc_results: Vec<_> = modules
-        .par_iter()
-        .map(|module| typechecker::check_module(module, &shared_env))
-        .collect();
-
-    let tc_ok   = tc_results.iter().filter(|r| r.is_ok()).count();
-    let tc_fail = tc_results.len() - tc_ok;
-
-    for (module, result) in modules.iter().zip(tc_results.iter()) {
-        if let Err(e) = result {
-            println!("Type Error in {}: {:?}", module.name, e);
-        }
-    }
-    println!("Typechecking done: {}/{} ok", tc_ok, tc_ok + tc_fail);
-
-
-    // -----------------------------------------------------------------------
-    println!("\n--- Codegen (.phi → .beam directly) ---");
-    let _ = fs::remove_dir_all("ebin");
-    let _ = fs::create_dir_all("ebin");
-
-    // Start companion compilation concurrently to improve wall-clock time.
-    // We stage sources in ebin/ffi_src to avoid racing with direct .beam writes.
-    let direct_ok_ctr = Arc::new(AtomicUsize::new(0));
-    let direct_fail_ctr = Arc::new(AtomicUsize::new(0));
     let ffi_ok_ctr = Arc::new(AtomicUsize::new(0));
     let ffi_fail_ctr = Arc::new(AtomicUsize::new(0));
     let ffi_total_ctr = Arc::new(AtomicUsize::new(0));
-
-    let progress_done = Arc::new(AtomicUsize::new(0));
-    let progress_thread = {
-        let direct_ok_ctr = Arc::clone(&direct_ok_ctr);
-        let direct_fail_ctr = Arc::clone(&direct_fail_ctr);
-        let ffi_ok_ctr = Arc::clone(&ffi_ok_ctr);
-        let ffi_fail_ctr = Arc::clone(&ffi_fail_ctr);
-        let ffi_total_ctr = Arc::clone(&ffi_total_ctr);
-        let progress_done = Arc::clone(&progress_done);
-        thread::spawn(move || {
-            while progress_done.load(Ordering::Relaxed) == 0 {
-                let d_ok = direct_ok_ctr.load(Ordering::Relaxed);
-                let d_fail = direct_fail_ctr.load(Ordering::Relaxed);
-                let f_ok = ffi_ok_ctr.load(Ordering::Relaxed);
-                let f_fail = ffi_fail_ctr.load(Ordering::Relaxed);
-                let f_total = ffi_total_ctr.load(Ordering::Relaxed);
-                eprint!("\r  [progress] direct: {d_ok} ok / {d_fail} fail | ffi: {f_ok} ok / {f_fail} fail / {f_total} total");
-                let _ = std::io::Write::flush(&mut std::io::stderr());
-                thread::sleep(Duration::from_millis(200));
-            }
-            eprintln!();
-        })
-    };
 
     let ffi_thread = {
         let search_paths = search_paths.clone();
@@ -158,8 +83,11 @@ fn main() {
         let ffi_fail_ctr = Arc::clone(&ffi_fail_ctr);
         let ffi_total_ctr = Arc::clone(&ffi_total_ctr);
         thread::spawn(move || {
+            let _ = fs::remove_dir_all("ebin");
+            let _ = fs::create_dir_all("ebin");
+
             // -----------------------------------------------------------------------
-            // Pass 4 (concurrent): Companion .erl compilation (parallel erlc)
+            // FFI staging and batch compilation (parallel copy/rewrite, single erlc)
             // -----------------------------------------------------------------------
             let ffi_src_dir = Path::new("ebin/ffi_src");
             let _ = fs::remove_dir_all(ffi_src_dir);
@@ -193,9 +121,19 @@ fn main() {
             }).collect();
 
             // Copy companion .erl files into ffi_src_dir/ root in parallel.
+            // Rename Phi.X.erl → Phi.X.FFI.erl so the filename matches the
+            // rewritten -module('Phi.X.FFI') declaration (erlc errors on mismatch).
             companion_paths.par_iter().for_each(|src| {
                 if let Some(filename) = src.file_name() {
-                    let dest = ffi_src_dir.join(filename);
+                    let name = filename.to_string_lossy();
+                    let dest_name = if name.starts_with("Phi.") && name.ends_with(".erl")
+                        && !name.ends_with(".FFI.erl")
+                    {
+                        format!("{}.FFI.erl", &name[..name.len() - 4])
+                    } else {
+                        name.into_owned()
+                    };
+                    let dest = ffi_src_dir.join(&dest_name);
                     let _ = fs::copy(src, dest);
                 }
             });
@@ -215,6 +153,7 @@ fn main() {
                 let mut lines: Vec<String> = Vec::new();
                 let mut changed = false;
                 for line in content.lines() {
+                    // Rewrite -include paths to flat filenames.
                     if line.trim().starts_with("-include(") {
                         if let Some(start) = line.find('"') {
                             if let Some(end) = line.rfind('"') {
@@ -229,6 +168,15 @@ fn main() {
                                 }
                             }
                         }
+                    }
+                    // Rewrite -module('Phi.X'). → -module('Phi.X.FFI'). so that erlc
+                    // produces Phi.X.FFI.beam and does not overwrite phi-compiled Phi.X.beam.
+                    // Skip if already has .FFI suffix.
+                    if line.trim().starts_with("-module('Phi.") && !line.contains(".FFI'") {
+                        let new_line = line.replacen("').", ".FFI').", 1);
+                        lines.push(new_line);
+                        changed = true;
+                        continue;
                     }
                     lines.push(line.to_string());
                 }
@@ -280,6 +228,77 @@ fn main() {
         })
     };
 
+    // -----------------------------------------------------------------------
+    // Pass 2: Typechecking (sequential env build, then parallel check)
+    // -----------------------------------------------------------------------
+    println!("\n--- Typechecking ---");
+    let mut current_env = env::Env::new();
+
+    // Sequential: build_env mutates shared state
+    for module in &modules {
+        typechecker::build_env(module, &mut current_env);
+    }
+
+    // Inject implicit Prelude imports (and other stdlib functions)
+    // We treat every qualified binding 'Mod.Name' as a potential alias 'Name' -> 'Mod.Name'
+    // if Mod is a standard library module.
+    let stdlib_aliases: Vec<(String, String)> = current_env.bindings.keys()
+        .filter(|k| k.contains('.'))
+        .map(|k| {
+            let dot = k.rfind('.').unwrap();
+            (k[dot+1..].to_string(), k.clone())
+        })
+        .collect();
+    
+    for (k, v) in stdlib_aliases {
+        // Only inject if it doesn't conflict or if it's from a common module
+        if !current_env.term_aliases.contains_key(&k) {
+            current_env.term_aliases.insert(k, v);
+        }
+    }
+
+    let shared_env = Arc::new(current_env);
+
+    // Parallel typecheck — each module gets an independent fresh State; env is Arc<Env> (read-only).
+    let tc_results: Vec<_> = modules
+        .par_iter()
+        .map(|module| typechecker::check_module(module, &shared_env))
+        .collect();
+
+    let tc_ok   = tc_results.iter().filter(|r| r.is_ok()).count();
+    let tc_fail = tc_results.len() - tc_ok;
+
+    for (module, result) in modules.iter().zip(tc_results.iter()) {
+        if let Err(e) = result {
+            println!("Type Error in {}: {:?}", module.name, e);
+        }
+    }
+    println!("Typechecking done: {}/{} ok", tc_ok, tc_ok + tc_fail);
+
+
+    // -----------------------------------------------------------------------
+    println!("\n--- Codegen (.phi → .beam directly) ---");
+
+    let direct_ok_ctr = Arc::new(AtomicUsize::new(0));
+    let direct_fail_ctr = Arc::new(AtomicUsize::new(0));
+
+    let progress_done = Arc::new(AtomicUsize::new(0));
+    let progress_thread = {
+        let direct_ok_ctr = Arc::clone(&direct_ok_ctr);
+        let direct_fail_ctr = Arc::clone(&direct_fail_ctr);
+        let progress_done = Arc::clone(&progress_done);
+        thread::spawn(move || {
+            while progress_done.load(Ordering::Relaxed) == 0 {
+                let d_ok = direct_ok_ctr.load(Ordering::Relaxed);
+                let d_fail = direct_fail_ctr.load(Ordering::Relaxed);
+                eprint!("\r  [progress] direct: {d_ok} ok / {d_fail} fail");
+                let _ = std::io::Write::flush(&mut std::io::stderr());
+                thread::sleep(Duration::from_millis(200));
+            }
+            eprintln!();
+        })
+    };
+
     // Try direct BEAM binary generation in parallel for each module
     let beam_results: Vec<(String, Result<Vec<u8>, beam_writer::BeamGenError>)> = modules
         .par_iter()
@@ -292,13 +311,10 @@ fn main() {
 
     let beam_direct_counter = Arc::new(Mutex::new((0usize, 0usize, 0usize))); // (direct_ok, erlc_ok, fail)
 
-    beam_results.par_iter().for_each(|(mod_name, gen_res)| {
+    // Count successes/failures (in memory, before any disk writes).
+    beam_results.iter().for_each(|(mod_name, gen_res)| {
         match gen_res {
-            Ok(beam_bytes) => {
-                // Write .beam directly — no Erlang involved
-                let beam_path = format!("ebin/{}.beam", mod_name);
-                let _ = fs::write(&beam_path, beam_bytes);
-                println!("  Directly emitted: {mod_name}.beam");
+            Ok(_) => {
                 direct_ok_ctr.fetch_add(1, Ordering::Relaxed);
                 let mut c = beam_direct_counter.lock().unwrap();
                 c.0 += 1;
@@ -312,8 +328,18 @@ fn main() {
         }
     });
 
-    // Wait for concurrent FFI compilation to finish.
+    // Wait for FFI thread BEFORE writing phi beams so that phi-compiled modules
+    // take priority over any same-named erlc-compiled FFI companions.
     let _ = ffi_thread.join();
+
+    // Write phi-compiled beams after erlc has finished — overwrites FFI stubs.
+    beam_results.par_iter().for_each(|(mod_name, gen_res)| {
+        if let Ok(beam_bytes) = gen_res {
+            let beam_path = format!("ebin/{}.beam", mod_name);
+            let _ = fs::write(&beam_path, beam_bytes);
+            println!("  Directly emitted: {mod_name}.beam");
+        }
+    });
     progress_done.store(1, Ordering::Relaxed);
     let _ = progress_thread.join();
 
