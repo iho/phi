@@ -4,16 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Φ — Native PureScript for Erlang VM</title>
-    <link rel="stylesheet" href="index.css?v=5">
+    <script>
+        (function () {
+            var storedTheme = localStorage.getItem('phi-docs-theme');
+            var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        }());
+    </script>
+    <link id="theme-stylesheet" rel="stylesheet" href="index-light.css?v=6">
+    <script>
+        (function () {
+            var theme = document.documentElement.getAttribute('data-theme');
+            var stylesheet = document.getElementById('theme-stylesheet');
+            stylesheet.setAttribute('href', theme === 'dark' ? 'index-black.css?v=6' : 'index-light.css?v=6');
+        }());
+    </script>
 </head>
 <body>
     <nav class="sticky">
         <div class="nav-container">
             <a href="index.html" class="logo">Ф</a>
-            <ul class="nav-links">
-                <li><a href="index.html">Language</a></li>
-                <li><a href="library.html">Library</a></li>
-            </ul>
+            <div class="nav-actions">
+                <ul class="nav-links">
+                    <li><a href="index.html">Language</a></li>
+                    <li><a href="library.html">Library</a></li>
+                </ul>
+                <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle color theme">Dark</button>
+            </div>
         </div>
     </nav>
 
@@ -24,8 +42,8 @@
             implementing <b>PureScript</b> and <b>Hamler</b> syntax and sematics,
             rewritten in <b>Elixir</b> for <b>Erlang/OTP</b> concurrency model.
              <!--Алгебраїчна чиста функціональна мова програмування Phi, яка реалізує синтаксис і семантику PureScript,
-                                     написана на Elixir для телекомунікаційної платформи <b>Erlang</b>.--></p>
-            <div style="float:inline;align:center;margin-left:-23px;" class="code-snippet">module Main where
+                                    написана на Elixir для телекомунікаційної платформи <b>Erlang</b>.--></p>
+            <div style="margin-left:-23px;" class="code-snippet">module Main where
 
 import Prelude
 import Effect.Console (log)
@@ -146,5 +164,47 @@ This language was created by non-human impersonated spirits of these guys repres
             </div>
         </div>
     </footer>
+    <script>
+        (function () {
+            var stylesheet = document.getElementById('theme-stylesheet');
+            var toggle = document.getElementById('theme-toggle');
+            var mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+            function themeHref(theme) {
+                return theme === 'dark' ? 'index-black.css?v=6' : 'index-light.css?v=6';
+            }
+
+            function resolvedTheme() {
+                var storedTheme = localStorage.getItem('phi-docs-theme');
+                if (storedTheme === 'light' || storedTheme === 'dark') {
+                    return storedTheme;
+                }
+                return mediaQuery && mediaQuery.matches ? 'dark' : 'light';
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                stylesheet.setAttribute('href', themeHref(theme));
+                toggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+                toggle.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' theme');
+            }
+
+            applyTheme(resolvedTheme());
+
+            toggle.addEventListener('click', function () {
+                var nextTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('phi-docs-theme', nextTheme);
+                applyTheme(nextTheme);
+            });
+
+            if (mediaQuery) {
+                mediaQuery.addEventListener('change', function () {
+                    if (!localStorage.getItem('phi-docs-theme')) {
+                        applyTheme(resolvedTheme());
+                    }
+                });
+            }
+        }());
+    </script>
 </body>
 </html>

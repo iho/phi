@@ -84,6 +84,11 @@ nav.sticky {
     color: RosyBrown;
 }
 
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
 
 .nav-container {
     max-width: 1380px;
@@ -108,6 +113,31 @@ nav.sticky {
 
 .logo:hover {
     color: var(--accent);
+}
+
+.theme-toggle {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 0.55rem 0.9rem;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+}
+
+.theme-toggle:hover {
+    border-color: var(--accent);
+    background: #fff5fa;
+    transform: translateY(-1px);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 /* HERO */
@@ -370,11 +400,15 @@ footer {
 @media (max-width: 768px) {
     .nav-container { padding: 1rem 1.5rem; }
     .nav-links { gap: 1.5rem; }
+    .nav-actions { gap: 0.75rem; }
     main { padding: 3.5rem 1.5rem 6rem; }
     h2 { font-size: 2.15rem; }
 }
 
 @media (max-width: 620px) {
+    .nav-container { gap: 0.75rem; }
+    .nav-actions { flex-direction: column; align-items: flex-end; }
+    .nav-links { gap: 1rem; }
     .library-index { padding: 2.5rem 1rem 5rem; }
     .library-index h1 { margin-bottom: 3.2rem; font-size: clamp(2.6rem, 9vw, 4rem); }
 }

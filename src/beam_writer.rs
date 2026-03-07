@@ -225,6 +225,7 @@ const OP_GET_TUPLE_ELEMENT: u8 = 66;
 const OP_GET_LIST        : u8 = 65;
 const OP_CASE_END        : u8 = 74;
 const OP_PUT          : u8 = 71;
+const OP_CALL_EXT_ONLY: u8 = 78;
 const OP_CALL_FUN     : u8 = 75;  // 0x4B verified from beam binary
 const OP_IF_END       : u8 = 73;
 const OP_IS_TUPLE        : u8 = 57;
@@ -408,14 +409,13 @@ impl BeamModule {
 
         // OTP's JIT only supports X registers as make_fun3 destination (erlc always uses X(0)).
         // Always emit into X(0), then move to the actual dst if different.
+        // beam_asm.erl: make_op({make_fun3,Fun,Dst,{list,Env}}, Dict) encodes Env as
+        //   {list,[...]} = TAG_Z(1), TAG_U(NumFree), reg0, reg1, ...
         self.emit_op(OP_MAKE_FUN3);
         self.emit_arg(TAG_U, fun_idx as u64);
         self.emit_reg_arg(Reg::X(0));
-
-        // Free variables: extended list — TAG_Z(1) is the list-type marker (always 0x17),
-        // followed by TAG_U(count), then each register.
-        self.emit_arg(TAG_Z, 1);
-        self.emit_arg(TAG_U, free_vars.len() as u64);
+        self.emit_arg(TAG_Z, 1);                        // {z,1} list tag for free-var list
+        self.emit_arg(TAG_U, free_vars.len() as u64);   // list length = NumFree
         for &r in free_vars {
             self.emit_reg_arg(r);
         }
@@ -532,6 +532,12 @@ impl BeamModule {
         self.emit_arg(TAG_U, import_idx as u64);
     }
 
+    fn emit_call_ext_only(&mut self, arity: u32, import_idx: u32) {
+        self.emit_op(OP_CALL_EXT_ONLY);
+        self.emit_arg(TAG_U, arity as u64);
+        self.emit_arg(TAG_U, import_idx as u64);
+    }
+
     fn emit_call(&mut self, arity: u32, label: u32) {
         self.emit_op(OP_CALL);
         self.emit_arg(TAG_U, arity as u64);
@@ -543,7 +549,7 @@ impl BeamModule {
         self.emit_arg(TAG_U, arity as u64);
     }
 
-    fn emit_put_tuple2(&mut self, arity: u32, target: Reg, elements: &[Reg]) {
+    pub fn emit_put_tuple2(&mut self, arity: u32, target: Reg, elements: &[Reg]) {
         self.emit_op(OP_PUT_TUPLE2);
         self.emit_reg_arg(target);
         self.emit_arg(TAG_Z, 1); // Extended tag with list_tag (1)
@@ -585,7 +591,23 @@ impl BeamModule {
         self.emit_arg(TAG_U, stack_size as u64);
     }
 
-    fn emit_test_heap(&mut self, heap_words: u32, live_regs: u32) {
+    /// Emit `deallocate` with a 2-byte placeholder for `stack_size`.
+    /// Returns the byte offset so it can be patched with `patch_dealloc_size`.
+    fn begin_deallocate(&mut self) -> usize {
+        self.emit_op(OP_DEALLOCATE);
+        let offset = self.code_buf.len();
+        self.code_buf.push(TAG_U | 8);
+        self.code_buf.push(0);
+        offset
+    }
+
+    fn patch_dealloc_size(&mut self, offset: usize, stack_size: u32) {
+        let v = stack_size as u64;
+        self.code_buf[offset]     = (((v >> 3) & 0xE0u64) as u8) | TAG_U | 8;
+        self.code_buf[offset + 1] = (v & 0xFF) as u8;
+    }
+
+    pub fn emit_test_heap(&mut self, heap_words: u32, live_regs: u32) {
         self.emit_op(OP_TEST_HEAP);
         self.emit_arg(TAG_U, heap_words as u64);
         self.emit_arg(TAG_U, live_regs as u64);
@@ -616,12 +638,12 @@ impl BeamModule {
         self.emit_reg_arg(dst);
     }
 
-    fn emit_make_nil(&mut self, dst: Reg) {
-        // Construct [] via runtime helper to avoid invalid literal encodings.
-        // Phi.Runtime.List:nil/0 -> []
-        let imp_idx = self.intern_import("Phi.Runtime.List", "nil", 0);
-        self.emit_call_ext(0, imp_idx);
-        self.emit_move(Reg::X(0), dst);
+    pub fn emit_make_nil(&mut self, dst: Reg) {
+        // [] (nil) is encoded as TAG_A with index 0 per OTP beam_asm.erl:
+        // encode_arg(nil, Dict) -> {encode(?tag_a, 0), Dict}
+        self.emit_op(OP_MOVE);
+        self.emit_arg(TAG_A, 0); // nil = atom index 0
+        self.emit_reg_arg(dst);
     }
 
     fn emit_jump(&mut self, label: u32) {
@@ -673,7 +695,7 @@ impl BeamModule {
         self.emit_reg_arg(tail);
     }
 
-    fn emit_put_list(&mut self, head: Reg, tail: Reg, dst: Reg) {
+    pub fn emit_put_list(&mut self, head: Reg, tail: Reg, dst: Reg) {
         self.emit_op(_OP_PUT_LIST);
         self.emit_reg_arg(head);
         self.emit_reg_arg(tail);
@@ -939,6 +961,19 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
             let clause_labels: Vec<u32> = (0..decls.len()).map(|_| beam.next_label_id()).collect();
             let fail_all = beam.next_label_id();
 
+            // Emit ONE shared allocate before any clause so that when a clause
+            // fails its pattern test and falls through to the next clause label,
+            // there is no second allocate. All clauses share this single frame.
+            // ForeignImport clauses do not need a frame (tail call via call_ext_only).
+            let has_non_ffi = decls.iter().any(|d| !matches!(d, ast::Decl::ForeignImport(..)));
+            let shared_alloc_off = if has_non_ffi {
+                Some(beam.begin_allocate(item.arity))
+            } else {
+                None
+            };
+            let mut global_max_stack = 0u32;
+            let mut dealloc_offsets: Vec<usize> = Vec::new();
+
             for (idx, decl) in decls.iter().enumerate() {
                 beam.emit_label(clause_labels[idx]);
                 let fail_to = if idx + 1 < decls.len() { clause_labels[idx + 1] } else { fail_all };
@@ -953,9 +988,6 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                             lambda_counter: &mut lambda_counter,
                             arg_offset: 0,
                         };
-
-                        let alloc_off = beam.begin_allocate(item.arity);
-                        ctx.max_stack = 0;
 
                         for (i, binder) in binders.iter().enumerate() {
                             let y_reg = ctx.push_y();
@@ -986,9 +1018,8 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                         }
 
                         emit_expr(&mut beam, expr, &mut ctx, Reg::X(0))?;
-                        let alloc = ctx.max_stack.max(1);
-                        beam.patch_alloc_size(alloc_off, alloc);
-                        beam.emit_deallocate(alloc);
+                        if ctx.max_stack > global_max_stack { global_max_stack = ctx.max_stack; }
+                        dealloc_offsets.push(beam.begin_deallocate());
                         beam.emit_return();
                     }
                     ast::Decl::PatBind(binder, expr, _) => {
@@ -1003,12 +1034,9 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                         };
 
                         if let ast::Binder::Var(_name) = binder {
-                            let alloc_off = beam.begin_allocate(item.arity);
-                            ctx.max_stack = 0;
                             emit_expr(&mut beam, expr, &mut ctx, Reg::X(0))?;
-                            let alloc = ctx.max_stack.max(1);
-                            beam.patch_alloc_size(alloc_off, alloc);
-                            beam.emit_deallocate(alloc);
+                            if ctx.max_stack > global_max_stack { global_max_stack = ctx.max_stack; }
+                            dealloc_offsets.push(beam.begin_deallocate());
                             beam.emit_return();
                         } else {
                             return Err(BeamGenError::Unsupported("top_patbind"));
@@ -1024,8 +1052,6 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                             arg_offset: 0,
                         };
 
-                        let alloc_off = beam.begin_allocate(item.arity);
-                        ctx.max_stack = 0;
                         for (i, binder) in binders.iter().enumerate() {
                             let y_reg = ctx.push_y();
                             beam.emit_move_x_to_y(i as u32, y_reg.y_index().unwrap());
@@ -1083,20 +1109,29 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                         }
 
                         beam.emit_label(end_label);
-                        let alloc = ctx.max_stack.max(1);
-                        beam.patch_alloc_size(alloc_off, alloc);
-                        beam.emit_deallocate(alloc);
+                        if ctx.max_stack > global_max_stack { global_max_stack = ctx.max_stack; }
+                        dealloc_offsets.push(beam.begin_deallocate());
                         beam.emit_return();
                     }
                     ast::Decl::ForeignImport(original, _, _) => {
                         let ffi_mod_name = format!("Phi.{}.FFI", module.name);
                         let imp_idx = beam.intern_import(&ffi_mod_name, original, item.arity);
-                        beam.emit_call_ext(item.arity, imp_idx);
-                        beam.emit_return();
+                        beam.emit_call_ext_only(item.arity, imp_idx);
                     }
                     _ => {}
                 }
             }
+
+            // Patch the single shared allocate and all deallocates with the
+            // maximum Y-register high-water mark across all clauses.
+            let final_alloc = global_max_stack.max(1);
+            if let Some(off) = shared_alloc_off {
+                beam.patch_alloc_size(off, final_alloc);
+            }
+            for off in dealloc_offsets {
+                beam.patch_dealloc_size(off, final_alloc);
+            }
+
             beam.emit_label(fail_all);
             beam.emit_if_end();
             
@@ -1383,11 +1418,12 @@ fn emit_pattern_check(
             let bytes = s.as_bytes();
 
             let tail_y = ctx.push_y();
-            let imp_nil = beam.intern_import("Phi.Runtime.List", "nil", 0);
-            beam.emit_call_ext(0, imp_nil);
-            beam.emit_move(Reg::X(0), tail_y);
+            beam.emit_make_nil(tail_y); // nil = move TAG_A(0)
             let mut acc = tail_y;
 
+            if !bytes.is_empty() {
+                beam.emit_test_heap((2 * bytes.len()) as u32, ctx.next_x);
+            }
             for b in bytes.iter().rev() {
                 let head_y = ctx.push_y();
                 beam.emit_move_to_reg(TAG_I, *b as u64, head_y);
@@ -1430,32 +1466,20 @@ fn emit_pattern_check(
                 return Ok(());
             }
 
-            // [a,b,c] pattern or [head|tail] pattern
-            if items.len() == 2 {
-                // Special case: [head|tail] pattern
-                beam.emit_is_nonempty_list(fail_label, reg);
+            // Fixed-length proper list pattern [a,b,...] — always exact match.
+            // The parser encodes both [a,b] and [a|b] as Binder::List([a,b]);
+            // cons patterns ([h|t]) should use Binder::Constructor(":", [h,t]).
+            let mut cur = reg;
+            for item in items.iter() {
+                beam.emit_is_nonempty_list(fail_label, cur);
                 let head = ctx.push_y();
                 let tail = ctx.push_y();
-                beam.emit_get_list(reg, head, tail);
-                
-                // First item binds to head, second item binds to tail
-                emit_pattern_check(beam, &items[0], head, fail_label, ctx)?;
-                emit_pattern_check(beam, &items[1], tail, fail_label, ctx)?;
-            } else {
-                // Fixed-length list pattern [a,b,c,...]
-                let mut cur = reg;
-                for item in items.iter() {
-                    beam.emit_is_nonempty_list(fail_label, cur);
-                    let head = ctx.push_y();
-                    let tail = ctx.push_y();
-                    beam.emit_get_list(cur, head, tail);
-                    
-                    emit_pattern_check(beam, item, head, fail_label, ctx)?;
-                    cur = tail;
-                }
-                // After consuming all items, tail must be []
-                beam.emit_is_nil(fail_label, cur);
+                beam.emit_get_list(cur, head, tail);
+                emit_pattern_check(beam, item, head, fail_label, ctx)?;
+                cur = tail;
             }
+            // After consuming all items, tail must be []
+            beam.emit_is_nil(fail_label, cur);
             Ok(())
         }
         ast::Binder::Named(name, inner) => {
@@ -1557,11 +1581,12 @@ fn emit_expr(
 
             // Build the list of bytes as a list term in a Y register.
             let tail_y = ctx.push_y();
-            let imp_nil = beam.intern_import("Phi.Runtime.List", "nil", 0);
-            beam.emit_call_ext(0, imp_nil);
-            beam.emit_move(Reg::X(0), tail_y);
+            beam.emit_make_nil(tail_y); // nil = move TAG_A(0)
             let mut acc = tail_y;
 
+            if !bytes.is_empty() {
+                beam.emit_test_heap((2 * bytes.len()) as u32, ctx.next_x);
+            }
             for b in bytes.iter().rev() {
                 let head_y = ctx.push_y();
                 beam.emit_move_to_reg(TAG_I, *b as u64, head_y);
@@ -1591,11 +1616,12 @@ fn emit_expr(
             let bytes = f.as_bytes();
 
             let tail_y = ctx.push_y();
-            let imp_nil = beam.intern_import("Phi.Runtime.List", "nil", 0);
-            beam.emit_call_ext(0, imp_nil);
-            beam.emit_move(Reg::X(0), tail_y);
+            beam.emit_make_nil(tail_y); // nil = move TAG_A(0)
             let mut acc = tail_y;
 
+            if !bytes.is_empty() {
+                beam.emit_test_heap((2 * bytes.len()) as u32, ctx.next_x);
+            }
             for b in bytes.iter().rev() {
                 let head_y = ctx.push_y();
                 beam.emit_move_to_reg(TAG_I, *b as u64, head_y);
@@ -1749,7 +1775,11 @@ fn emit_expr(
                 emit_expr(beam, elem, ctx, y)?;
                 elem_ys.push(y);
             }
-            
+
+            // test_heap: tuple header (1) + arity words per OTP beam_asm
+            if arity > 0 {
+                beam.emit_test_heap(arity + 1, ctx.next_x);
+            }
             beam.emit_put_tuple2(arity, target, &elem_ys);
             
             for _ in 0..arity {
@@ -2149,12 +2179,14 @@ fn emit_expr(
                 y
             } else {
                 let y = ctx.push_y();
-                let imp_nil = beam.intern_import("Phi.Runtime.List", "nil", 0);
-                beam.emit_call_ext(0, imp_nil);
-                beam.emit_move(Reg::X(0), y);
+                beam.emit_make_nil(y); // nil = move TAG_A(0)
                 y
             };
 
+            // test_heap: 2 words per cons cell (head + tail pointer)
+            if !items.is_empty() {
+                beam.emit_test_heap((2 * items.len()) as u32, ctx.next_x);
+            }
             let mut acc = tail_y;
             for &head_y in elem_ys.iter().rev() {
                 let dst = ctx.push_y();
