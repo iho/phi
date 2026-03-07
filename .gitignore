@@ -46,3 +46,5 @@ deps
 phi/target/
 target
 ebin
+beam-sys/
+otp

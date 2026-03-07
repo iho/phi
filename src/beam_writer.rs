@@ -406,17 +406,23 @@ impl BeamModule {
         self.emit_arg(TAG_U, 2); self.emit_arg(TAG_U, 1);               // {funs, 1}
         self.emit_arg(TAG_U, live as u64); // live X registers
 
-        // make_fun3: FunIndex (TAG_U), Dst (Reg), EnvList (TAG_Z)
+        // OTP's JIT only supports X registers as make_fun3 destination (erlc always uses X(0)).
+        // Always emit into X(0), then move to the actual dst if different.
         self.emit_op(OP_MAKE_FUN3);
         self.emit_arg(TAG_U, fun_idx as u64);
-        self.emit_reg_arg(dst);
-        
+        self.emit_reg_arg(Reg::X(0));
+
         // Free variables: extended list — TAG_Z(1) is the list-type marker (always 0x17),
-        // followed by TAG_U(count), then each register.  Matches put_tuple2 encoding.
+        // followed by TAG_U(count), then each register.
         self.emit_arg(TAG_Z, 1);
         self.emit_arg(TAG_U, free_vars.len() as u64);
         for &r in free_vars {
             self.emit_reg_arg(r);
+        }
+
+        // Move result from X(0) to actual destination if needed.
+        if dst != Reg::X(0) {
+            self.emit_move(Reg::X(0), dst);
         }
     }
 
@@ -441,7 +447,7 @@ impl BeamModule {
         if value < 16 {
             self.code_buf.push((value << 4) as u8 | tag);
         } else if value < 2048 {
-            let b1 = ((value >> 3) & !7) as u8 | tag | 8;
+            let b1 = ((value >> 3) & 0xE0u64) as u8 | tag | 8;
             let b2 = (value & 0xFF) as u8;
             self.code_buf.push(b1);
             self.code_buf.push(b2);
@@ -792,6 +798,19 @@ impl BeamModule {
 /// Returns `None` if the module uses constructs too complex for simple codegen
 /// (the caller falls back to `erlc` in that case).
 pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<u8>, BeamGenError> {
+    // Build a per-module env: clone global env but override module_aliases with only
+    // this module's own Import declarations. The global env merges aliases from ALL
+    // modules (last writer wins), so e.g. `Test/Data/Map.phi`'s `import Data.Map as M`
+    // would clobber `Test.phi`'s `import Test.Data.Map as M`.
+    let mut local_env = env.clone();
+    local_env.module_aliases.clear();
+    for decl in &module.declarations {
+        if let crate::ast::Decl::Import(m, _items, Some(alias), _) = decl {
+            local_env.module_aliases.insert(alias.clone(), m.clone());
+        }
+    }
+    let env = &local_env;
+
     let erl_mod_name = format!("Phi.{}", module.name);
     let mut beam = BeamModule::new(&erl_mod_name);
     let mod_atom = beam.intern_atom(&erl_mod_name);
@@ -872,24 +891,35 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
                 arg_offset: item.num_free,
             };
 
-            // Bind lambda parameters to X registers first
+            // emit allocate BEFORE any pattern check: tuple binders emit
+            // get_tuple_element to Y registers which requires an allocated frame.
+            ctx.max_stack = 0;
+            let lam_alloc_off = beam.begin_allocate(item.arity);
+
+            // Real fail label for pattern checks: using {f,0} (TAG_p) after allocate
+            // crashes the OTP JIT during loading; a real label is required.
+            let lam_fail_label = beam.next_label_id();
+
+            // Bind lambda parameters to X registers (may write Y regs for tuple binders)
             for (i, binder) in binders.iter().enumerate() {
                 let x_reg = Reg::X(i as u32);
-                emit_pattern_check(&mut beam, binder, x_reg, 0, &mut ctx)?;
+                emit_pattern_check(&mut beam, binder, x_reg, lam_fail_label, &mut ctx)?
             }
 
             // Bind free variables to X registers after parameters
             for (i, var) in free_vars_list.iter().enumerate() {
                 ctx.vars.insert(var.clone(), Reg::X(item.arity + i as u32));
             }
-            
-            ctx.max_stack = 0;
-            let lam_alloc_off = beam.begin_allocate(item.arity);
+
             emit_expr(&mut beam, &body, &mut ctx, Reg::X(0))?;
             let lam_alloc = ctx.max_stack.max(1);
             beam.patch_alloc_size(lam_alloc_off, lam_alloc);
             beam.emit_deallocate(lam_alloc);
             beam.emit_return();
+            // Pattern-match failure handler: raise case_clause exception.
+            // This must come after return so it's only reached via the fail label.
+            beam.emit_label(lam_fail_label);
+            beam.emit_case_end(Reg::X(0));
         } else {
             let decls = item.decls;
             let clause_labels: Vec<u32> = (0..decls.len()).map(|_| beam.next_label_id()).collect();
@@ -1057,7 +1087,7 @@ pub fn generate_beam(module: &ast::Module, env: &crate::env::Env) -> Result<Vec<
             beam.emit_if_end();
             
             // Export top-level functions
-            beam.exports.push(Export { function: fun_atom, arity: item.arity, label: item.label_entry });
+            beam.exports.push(Export { function: fun_atom, arity: item.arity, label: item.label_body });
         }
 
         for lifted in current_lifted {
@@ -1983,7 +2013,7 @@ fn emit_expr(
 
             let fun_atom = beam.intern_atom(&lam_name);
             // FunT arity must be total_arity (user + free); OTP computes user_arity = total_arity - num_free.
-            let fun_idx = beam.intern_fun(fun_atom, total_arity, entry_label, free_sorted.len() as u32);
+            let fun_idx = beam.intern_fun(fun_atom, total_arity, body_label, free_sorted.len() as u32);
             
             let live = ctx.stack_depth;
             beam.emit_make_fun3(fun_idx, live, target, &free_regs);
@@ -2259,24 +2289,30 @@ fn emit_call(
     let mut native_arity = None;
 
     if let ast::Expr::Var(name) = func {
-        // Find definitions in this module context
-        for (&(ref ln, la), _) in ctx.local_fns.iter() {
-            if ln == name {
-                native_arity = Some(la);
-                break;
-            }
-        }
+        // If the name is already a local variable (parameter or let-binding holding a fun),
+        // treat it as a dynamic call_fun — never resolve it as a module-qualified static call.
+        let is_local_var = ctx.vars.contains_key(name.as_str());
 
-        if let Some(n_arity) = native_arity {
-            if n_arity == arity {
-                is_static_call = true;
+        if !is_local_var {
+            // Find definitions in this module context
+            for (&(ref ln, la), _) in ctx.local_fns.iter() {
+                if ln == name {
+                    native_arity = Some(la);
+                    break;
+                }
             }
-        } else {
-            let resolved = ctx.env.resolve_term_alias(name);
-            if resolved.contains('.') {
-                // Assume external calls match their usage arity for now if not found in local_fns
-                // This is a simplification but works for many FFI cases.
-                is_static_call = true;
+
+            if let Some(n_arity) = native_arity {
+                if n_arity == arity {
+                    is_static_call = true;
+                }
+            } else {
+                let resolved = ctx.env.resolve_term_alias(name);
+                if resolved.contains('.') {
+                    // Assume external calls match their usage arity for now if not found in local_fns
+                    // This is a simplification but works for many FFI cases.
+                    is_static_call = true;
+                }
             }
         }
     }
