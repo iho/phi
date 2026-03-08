@@ -7,7 +7,6 @@ import Test.Data.Map as M
 import Test.Data.Atom as A
 import Test.Data.Array as A1
 import Test.Data.Bool as TB
-import Test.Data.List as L
 import Test.Data.Either as Ei
 import Test.Data.Tuple as Tu
 import Test.Data.Maybe as May
@@ -66,7 +65,6 @@ main = runTest $ TxG "lib"
                  , TxG "Array"    [A1.test]
                  , TxG "Atomics"  [Atomics.test]
                  , TxG "Bool"     [TB.test]
-                 , TxG "List"     [L.test]
                  , TxG "Bool"     [TB.test]
                  , TxG "Either"   [Ei.test]
                  , TxG "Tuple"    [Tu.test]

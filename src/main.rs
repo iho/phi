@@ -154,9 +154,9 @@ fn main() {
                 let mut changed = false;
                 for line in content.lines() {
                     // Rewrite -include paths to flat filenames.
-                    if line.trim().starts_with("-include(") {
-                        if let Some(start) = line.find('"') {
-                            if let Some(end) = line.rfind('"') {
+                    if line.trim().starts_with("-include(")
+                        && let Some(start) = line.find('"')
+                            && let Some(end) = line.rfind('"') {
                                 let path_str = &line[start+1..end];
                                 if let Some(filename) = Path::new(path_str).file_name() {
                                     let new_include = format!("-include(\"{}\").", filename.to_string_lossy());
@@ -167,8 +167,6 @@ fn main() {
                                     }
                                 }
                             }
-                        }
-                    }
                     // Rewrite -module('Phi.X'). → -module('Phi.X.FFI'). so that erlc
                     // produces Phi.X.FFI.beam and does not overwrite phi-compiled Phi.X.beam.
                     // Skip if already has .FFI suffix.
@@ -299,13 +297,24 @@ fn main() {
         })
     };
 
+    // Prepass: compute actual BEAM arities for all modules (PatBind = 0, Value(binders) = N).
+    let beam_arities_raw = beam_writer::compute_beam_arities(&modules);
+    for key in ["Phi.Control.Monad.bind", "Phi.Control.Monad.>>=", "Phi.Data.List.replicate", "Phi.Data.List.concat"] {
+        if let Some(v) = beam_arities_raw.get(key) {
+            eprintln!("[DEBUG beam_arities] {} = {}", key, v);
+        } else {
+            eprintln!("[DEBUG beam_arities] {} = MISSING", key);
+        }
+    }
+    let beam_arities = Arc::new(beam_arities_raw);
+
     // Try direct BEAM binary generation in parallel for each module
     let beam_results: Vec<(String, Result<Vec<u8>, beam_writer::BeamGenError>)> = modules
         .par_iter()
         .map(|module| {
             let name = format!("Phi.{}", module.name);
             println!("  [main] Target BEAM: {}.beam (module.name: {})", name, module.name);
-            (name, beam_writer::generate_beam(module, &shared_env))
+            (name, beam_writer::generate_beam(module, &shared_env, &beam_arities))
         })
         .collect();
 
@@ -343,7 +352,7 @@ fn main() {
     progress_done.store(1, Ordering::Relaxed);
     let _ = progress_thread.join();
 
-    let (direct_ok, erlc_ok, gen_fail) = {
+    let (direct_ok, _erlc_ok, gen_fail) = {
         let c = beam_direct_counter.lock().unwrap();
         (c.0, c.1, c.2)
     };

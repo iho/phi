@@ -17,10 +17,10 @@ pub fn parser() -> impl Parser<Token, Module, Error = Error> {
         Token::Operator(op) => Ok(op),
         _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
     });
-    let parens_op = op_id.clone().delimited_by(just(Token::LeftParen), just(Token::RightParen));
+    let parens_op = op_id.delimited_by(just(Token::LeftParen), just(Token::RightParen));
     let var_or_op = var_id.or(parens_op.clone());
 
-    let qual_proper = proper_id.clone().separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
+    let qual_proper = proper_id.separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
 
     let type_ = type_parser();
     let binder = binder_parser(type_.clone());
@@ -65,16 +65,16 @@ fn type_parser() -> impl Parser<Token, Type, Error = Error> + Clone {
             _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
         });
 
-        let qual_proper = proper_id.clone().separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
+        let qual_proper = proper_id.separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
 
-        let record_field = var_id.clone()
+        let record_field = var_id
             .then_ignore(just(Token::DoubleColon))
             .then(type_.clone())
             .map(|(name, ty)| Field { name: Some(name), ty });
 
         let atomic = choice((
             qual_proper.map(Type::Constructor),
-            var_id.clone().map(Type::Var),
+            var_id.map(Type::Var),
             just(Token::Unit).to(Type::Unit),
             type_.clone()
                 .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
@@ -129,7 +129,7 @@ fn binder_parser(
             Token::ProperName(name) => Ok(name),
             _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
         });
-        let qual_proper = proper_id.clone().separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
+        let qual_proper = proper_id.separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
 
         let num = filter_map(|span, tok| match tok {
             Token::Number(n) => Ok(n),
@@ -149,7 +149,7 @@ fn binder_parser(
         });
 
         let atomic = choice((
-            var_id.clone().map(Binder::Var),
+            var_id.map(Binder::Var),
             qual_proper.clone().map(|n| Binder::Constructor(n, vec![])),
             just(Token::Wildcard).to(Binder::Wildcard),
             num.map(Binder::Number),
@@ -211,12 +211,12 @@ fn expr_parser(
             Token::Operator(op) => Ok(op),
             _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
         });
-        let parens_op = op_id.clone().delimited_by(just(Token::LeftParen), just(Token::RightParen));
+        let parens_op = op_id.delimited_by(just(Token::LeftParen), just(Token::RightParen));
         
-        let qual_var = proper_id.clone().then_ignore(just(Token::Dot)).repeated().then(var_id.clone()).map(|(parts, name)| {
+        let qual_var = proper_id.then_ignore(just(Token::Dot)).repeated().then(var_id).map(|(parts, name)| {
             if parts.is_empty() { name } else { format!("{}.{}", parts.join("."), name) }
         });
-        let qual_proper = proper_id.clone().separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
+        let qual_proper = proper_id.separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
         let qual_var_or_op = qual_var.or(parens_op.clone());
 
         let num = filter_map(|span, tok| match tok {
@@ -242,9 +242,9 @@ fn expr_parser(
 
         let decl = decl_parser(type_.clone(), binder.clone(), expr.clone());
 
-        let record_field = var_id.clone().then_ignore(just(Token::Equals)).then(expr.clone());
+        let record_field = var_id.then_ignore(just(Token::Equals)).then(expr.clone());
 
-        let backtick_op = var_id.clone().delimited_by(just(Token::Backtick), just(Token::Backtick));
+        let backtick_op = var_id.delimited_by(just(Token::Backtick), just(Token::Backtick));
 
         let comp_stmt = choice((
             binder.clone().then_ignore(just(Token::LeftArrow)).then(expr.clone()).map(|(p, e)| CompStmt::Bind(p, e)),
@@ -353,7 +353,7 @@ fn expr_parser(
         let record_or_field = negate.clone()
             .then(choice((
                 record_field.separated_by(just(Token::Comma)).delimited_by(just(Token::LeftBrace), just(Token::RightBrace)).map(|fs| (None, Some(fs))),
-                just(Token::Dot).ignore_then(var_id.clone()).map(|v| (Some(v), None)),
+                just(Token::Dot).ignore_then(var_id).map(|v| (Some(v), None)),
             )).repeated())
             .foldl(|lhs, (v, fs)| match (v, fs) {
                 (Some(v), _) => Expr::FieldAccess(Box::new(lhs), v),
@@ -362,7 +362,7 @@ fn expr_parser(
             });
 
         let binop = record_or_field.clone()
-            .then(op_id.clone().or(backtick_op).then(high_precedence_rhs.or(record_or_field.clone())).repeated())
+            .then(op_id.or(backtick_op).then(high_precedence_rhs.or(record_or_field.clone())).repeated())
             .foldl(|lhs, (op, rhs)| Expr::BinOp(Box::new(lhs), op, Box::new(rhs)));
 
         let type_ann = binop.clone().then(just(Token::DoubleColon).ignore_then(type_.clone()).or_not()).map(|(e, t)| match t {
@@ -392,9 +392,9 @@ fn decl_parser(
             Token::Operator(op) => Ok(op),
             _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
         });
-        let parens_op = op_id.clone().delimited_by(just(Token::LeftParen), just(Token::RightParen));
-        let var_or_op = var_id.clone().or(parens_op.clone());
-        let qual_proper = proper_id.clone().separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
+        let parens_op = op_id.delimited_by(just(Token::LeftParen), just(Token::RightParen));
+        let var_or_op = var_id.or(parens_op.clone());
+        let qual_proper = proper_id.separated_by(just(Token::Dot)).at_least(1).map(|parts| parts.join("."));
         let num = filter_map(|span, tok| match tok {
             Token::Number(n) => Ok(n),
             _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
@@ -428,7 +428,7 @@ fn decl_parser(
                 Decl::Import(name, actual_items, alias, is_hiding)
             });
 
-        let field = var_id.clone().then_ignore(just(Token::DoubleColon)).or_not().then(type_.clone()).map(|(name, ty)| Field { name, ty });
+        let field = var_id.then_ignore(just(Token::DoubleColon)).or_not().then(type_.clone()).map(|(name, ty)| Field { name, ty });
         
         let constructor = qual_proper.clone()
             .then(choice((
@@ -439,29 +439,29 @@ fn decl_parser(
 
         let data = just(Token::Data)
             .ignore_then(qual_proper.clone())
-            .then(var_id.clone().repeated())
+            .then(var_id.repeated())
             .then(just(Token::Equals).ignore_then(constructor.clone().separated_by(just(Token::Pipe))).or_not())
             .map(|((name, params), constructors)| Decl::Data(name, params, constructors.unwrap_or_default()));
 
         let type_alias = just(Token::TypeKw)
             .ignore_then(qual_proper.clone())
-            .then(var_id.clone().repeated())
+            .then(var_id.repeated())
             .then_ignore(just(Token::Equals))
             .then(type_.clone())
             .map(|((name, params), t)| Decl::TypeAlias(name, params, t));
 
         let newtype = just(Token::Newtype)
             .ignore_then(qual_proper.clone())
-            .then(var_id.clone().repeated())
+            .then(var_id.repeated())
             .then_ignore(just(Token::Equals))
             .then(constructor.clone())
             .map(|((name, params), constr)| Decl::Newtype(name, params, constr));
 
-        let fundep = var_id.clone().repeated().at_least(1).then_ignore(just(Token::Arrow)).then(var_id.clone().repeated().at_least(1)).map(|(f, t)| Fundep { from: f, to: t });
+        let fundep = var_id.repeated().at_least(1).then_ignore(just(Token::Arrow)).then(var_id.repeated().at_least(1)).map(|(f, t)| Fundep { from: f, to: t });
 
         let atomic_type = choice((
             qual_proper.clone().map(Type::Constructor),
-            var_id.clone().map(Type::Var),
+            var_id.map(Type::Var),
             just(Token::Unit).to(Type::Unit),
             type_.clone().delimited_by(just(Token::LeftSquare), just(Token::RightSquare)).map(|t| Type::List(Box::new(t))),
             type_.clone().separated_by(just(Token::Comma)).delimited_by(just(Token::LeftParen), just(Token::RightParen)).map(|ts| if ts.len() == 1 { ts[0].clone() } else { Type::Tuple(ts) }),
@@ -475,7 +475,7 @@ fn decl_parser(
         let class = just(Token::Class)
             .ignore_then(constraints.clone().or_not())
             .then(qual_proper.clone())
-            .then(var_id.clone().repeated())
+            .then(var_id.repeated())
             .then(just(Token::Pipe).ignore_then(fundep.separated_by(just(Token::Comma))).or_not())
             .then(just(Token::Where).ignore_then(decl.clone().separated_by(just(Token::Semicolon)).delimited_by(just(Token::LeftBrace), just(Token::RightBrace))).or_not())
             .map(|((((constraints, name), params), fundeps), methods)| {
@@ -516,7 +516,7 @@ fn decl_parser(
             });
 
         let infix_val = binder.clone()
-            .then(op_id.clone())
+            .then(op_id)
             .then(binder.clone())
             .then_ignore(just(Token::Equals))
             .then(expr.clone())
@@ -533,7 +533,7 @@ fn decl_parser(
 
         let foreign = just(Token::Foreign).ignore_then(just(Token::Import)).ignore_then(choice((
             just(Token::Data).ignore_then(qual_proper.clone()).then_ignore(just(Token::DoubleColon)).then(type_.clone()).map(|(n, t)| Decl::ForeignData(n, t)),
-            string.clone().or(var_id.clone()).then(var_or_op.clone().or_not()).then_ignore(just(Token::DoubleColon)).then(type_.clone()).map(|((orig, local), t)| {
+            string.or(var_id).then(var_or_op.clone().or_not()).then_ignore(just(Token::DoubleColon)).then(type_.clone()).map(|((orig, local), t)| {
                 let l = local.unwrap_or_else(|| orig.clone());
                 Decl::ForeignImport(orig, l, t)
             })
@@ -541,7 +541,7 @@ fn decl_parser(
 
         let infix = choice((just(Token::Infix), just(Token::Infixl), just(Token::Infixr)))
             .then(num)
-            .then(var_or_op.clone().or(op_id.clone()))
+            .then(var_or_op.clone().or(op_id))
             .then_ignore(just(Token::As))
             .then(var_or_op.clone().or(op_id))
             .map(|(((tok, prec), op), alias)| {

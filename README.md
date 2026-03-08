@@ -112,6 +112,29 @@ erl -pa ebin
 Hello World from Phi!
 ```
 
+Run the generated test BEAMs:
+
+```bash
+# compile stdlib + test modules into ebin/
+cargo run -- src/stdlib src/tests
+
+# start Erlang with generated beams on the code path
+erl -pa ebin
+```
+
+Then, in the Erlang shell, run:
+
+```erlang
+'Phi.Test':main().
+```
+
+Notes:
+
+- `src/tests/Test.phi` is the main test entrypoint and is emitted as `ebin/Phi.Test.beam`.
+- Companion Erlang FFI modules are also compiled into `ebin/` as `Phi.*.FFI.beam` during `cargo run`.
+- If you only want to rebuild generated BEAMs before rerunning tests, rerun `cargo run -- src/stdlib src/tests` and restart `erl -pa ebin`.
+- The current README documents a known limitation: `Phi.Test:main/0` runtime constructor dispatch is not yet fully complete.
+
 ## Language Reference
 
 ### Types

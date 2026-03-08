@@ -38,6 +38,12 @@ import System.Random(randomRIO)
 import Data.Binary (listToBin)
 import System.Error (catchException)
 
+foreign import genPure :: forall a. a -> Gen a
+foreign import genBind :: forall a b. Gen a -> (a -> Gen b) -> Gen b
+foreign import isIO :: forall a. a -> Boolean
+foreign import mapListImpl :: forall a b. (a -> b) -> [a] -> [b]
+foreign import indexImpl :: forall a. Integer -> [a] -> a
+
 foreign import data Rand :: Type
 
 foreign import split :: Rand -> (Rand, Rand)
@@ -89,6 +95,7 @@ sized fgen = Gen ( \n r ->
 
 instance Functor Gen where
   map f (Gen m) = Gen $ \n r -> f (m n r)
+  map f xs = mapListImpl f xs
 
 instance Applicative Gen where
   apply (Gen f) (Gen a) = Gen $ \n r0 ->
@@ -106,13 +113,8 @@ instance Monad Gen where
 
 -----------------------------------------------------------------------------
 
-index :: forall a. Integer -> [a] -> a
-index 0 [x | _] = x
-index i [x | xs] = index (i-1) xs
-index _  _ = error "error input"
-
 elements :: forall a. [a] -> Gen a
-elements xs = map (\v -> index v xs) $ choose (0, length xs -1)
+elements xs = map (\v -> indexImpl v xs) $ choose (0, length xs -1)
 
 vector :: forall a. Arbitrary a => Integer -> Gen [a]
 vector 0 = pure []
@@ -139,9 +141,6 @@ class Arbitrary a where
 
 instance Arbitrary Boolean where
   arbitrary = elements [true, false]
-
-instance Arbitrary Integer where
-  arbitrary = sized (\n -> choose (-n, n))
 
 instance Arbitrary Float where
   arbitrary = choose (-100000000.0, 100000000.0)
@@ -170,6 +169,9 @@ instance (Coarbitrary a, Arbitrary b) => Arbitrary (a -> b) where
 instance Arbitrary v => Arbitrary (Maybe v) where
   arbitrary = liftM1 Just arbitrary
 
+instance Arbitrary Integer where
+  arbitrary = sized (\n -> choose (-n, n))
+
 -----------------------------------------------------------------------------
 
 class Coarbitrary a  where
@@ -195,34 +197,34 @@ nothing :: forall a. {ok :: Maybe a, stamp :: [String], arguments :: [String]}
 nothing =  {ok = Nothing, stamp =[], arguments = []}
 
 result :: Result -> Property
-result res = Prop (pure res)
+result res = Prop (genPure res)
 
 class Testable a where
   property :: a -> Property
 
 instance Testable Boolean where
-  property b = result ( Result nothing{ok= Just b})
+  property true  = result ( Result (nothing{ok= Just true}))
+  property false = result ( Result (nothing{ok= Just false}))
 
 instance Testable Property where
-  property prop = prop
-
-instance (Testable a) => Testable (IO a) where
-  property b = property $ unsafePerformIO b
+  property (Prop g) = Prop g
 
 instance (Arbitrary a, Testable b) => Testable (a -> b) where
-  property f = forAll arbitrary f
+  property b = if isIO b
+               then property (unsafePerformIO b)
+               else forAll arbitrary b
 
 evaluate :: forall a. Testable a => a -> Gen Result
 evaluate a = gen where Prop gen = property a
 
 forAll :: forall a b. Testable b => Gen a -> (a -> b) -> Property
 forAll gen body = Prop $
-      do a <- gen
-         Result res <- unsafePerformIO $ catchException (pure $ evaluate (body a)) handleExcept
-         pure $ Result (arg a res)
+      genBind gen (\a ->
+        genBind (unsafePerformIO $ catchException (pure $ evaluate (body a)) handleExcept)
+                (\(Result res) -> genPure $ Result $ arg a res))
     where
       arg a res = res{arguments = [showAny a | res.arguments ]}
-      handleExcept e = pure $ Gen $ \i r -> Result {arguments = [ showAny e], stamp = [], ok = Nothing }
+      handleExcept e = pure $ genPure $ Result {arguments = [ showAny e], stamp = [], ok = Nothing }
 
 type SpaceCounter = Integer
 
@@ -236,17 +238,15 @@ crashPipe :: String
 crashPipe = "●    "
 
 check :: forall a. Testable a => String -> Integer -> a -> SpaceCounter -> IO TestResult
-check s 0 m n = (printf "%s✔ %s" (concat $ replicate (n/5) basePipe) s :: IO ()) >>= \_ -> pure Successed
+check s 0 m n = (println ((concat $ replicate (n/5) basePipe) <> "✔ " <> s) :: IO ()) >>= \_ -> pure Successed
 check s v m n = do
   i <- randomRIO 1332292274972041455 7304856964418773083
   let Gen fun = evaluate m
       Result r =  fun 15 (mkRand i)
   case r.ok of
     Just true -> check s (v-1) m n
-    Just false -> (printf "%s✖ %s -----> %s"
-                    (concat $ replicate (n/5) errorPipe) s (showAny r.arguments) :: IO ()) >>= \_ -> pure $ Failed s (showAny r.arguments)
-    Nothing -> (printf "%s● %s ==> crash happened!!!  %s"
-                    (concat $ replicate (n/5) crashPipe) s (showAny r.arguments) :: IO ()) >>= \_ -> pure $ Crash s (showAny r.arguments)
+    Just false -> (println ((concat $ replicate (n/5) errorPipe) <> "✖ " <> s <> " -----> " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pure $ Failed s (showAny (r.arguments))
+    Nothing -> (println ((concat $ replicate (n/5) crashPipe) <> "● " <> s <> " ==> crash happened!!!  " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pure $ Crash s (showAny (r.arguments))
 
 
 quickCheck :: forall a. Testable a => String -> a -> SpaceCounter -> IO TestResult
@@ -275,7 +275,7 @@ runTestGroup n (TxG s xs) =
                    (succ, fail, crash, total) = tcount (0,0,0,0) res1
                    renderCrash 0 = ""
                    renderCrash i = "(crashed " <> show i <> ")"
-               printf "%s----> ◯ %d, ✔ %d, ✖ %d%s." (concat $ replicate (n/5) basePipe)  total succ fail (renderCrash crash)
+               println ((concat $ replicate (n/5) basePipe) <> "----> ◯ " <> show total <> ", ✔ " <> show succ <> ", ✖ " <> show fail <> renderCrash crash <> ".")
                pure res
 
 runTest :: TestGroup (Integer -> IO TestResult) -> IO ()

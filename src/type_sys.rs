@@ -47,13 +47,11 @@ impl fmt::Display for MonoType {
             MonoType::Con(name) => write!(f, "{}", name),
             MonoType::App(func, arg) => {
                 // Formatting -> nicely
-                if let MonoType::App(inner_f, inner_arg) = &**func {
-                    if let MonoType::Con(n) = &**inner_f {
-                        if n == "->" {
+                if let MonoType::App(inner_f, inner_arg) = &**func
+                    && let MonoType::Con(n) = &**inner_f
+                        && n == "->" {
                             return write!(f, "({} -> {})", inner_arg, arg);
                         }
-                    }
-                }
                 write!(f, "({} {})", func, arg)
             }
             MonoType::RowEmpty => write!(f, "()"),

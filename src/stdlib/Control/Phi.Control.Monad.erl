@@ -18,6 +18,7 @@
         , listAppend/2
         , bindImpl/2
         , bindListImpl/2
+        , fmapImpl/2
         , pureImpl/1
         , seqio/1
         , seqio_/1
@@ -35,7 +36,26 @@ applyListImpl(Funs, L) ->
 listAppend(A, B) -> lists:append(A, B).
 
 -spec(bindImpl(any(), fun((A :: term()) -> B :: term())) -> any()).
-bindImpl(X, F) -> fun() -> (F(X()))() end.
+bindImpl({'Gen', M}, F) ->
+    %% Gen monad bind: run generator M, pass value to F, run resulting generator.
+    {'Gen', fun(I, R) ->
+        A = M(I, R),
+        case F(A) of
+            {'Gen', G} -> G(I, R);
+            IOFun when is_function(IOFun, 0) -> IOFun()
+        end
+    end};
+bindImpl(X, F) ->
+    %% IO monad bind: wrap in a 0-arity fun for lazy execution.
+    fun() -> case F(X()) of
+                 {'Gen', _} = Gen -> Gen;  % shouldn't happen but be safe
+                 IOResult when is_function(IOResult, 0) -> IOResult();
+                 V -> V
+             end
+    end.
+
+-spec(fmapImpl(fun((A :: any()) -> B :: any()), any()) -> any()).
+fmapImpl(F, Ma) -> fun() -> F(Ma()) end.
 
 -spec(bindListImpl(list(term()), fun((term()) -> list(term()))) -> list(term())).
 bindListImpl(L, F) -> lists:append(lists:map(F, L)).

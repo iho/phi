@@ -84,23 +84,19 @@ impl<'a> LayoutResolver<'a> {
         let (token, span) = self.tokens[self.pos].clone();
         let (_line, col) = self.get_pos(span.start);
 
-        if let Token::In = token {
-            if let Some(ctx) = self.ctx_stack.last() {
-                if let Token::Let = ctx.trigger {
+        if let Token::In = token
+            && let Some(ctx) = self.ctx_stack.last()
+                && let Token::Let = ctx.trigger {
                     self.ctx_stack.pop();
                     return Some((Token::RightBrace, span.start..span.start));
                 }
-            }
-        }
 
-        if let Token::Where = token {
-            if let Some(ctx) = self.ctx_stack.last() {
-                if matches!(ctx.trigger, Token::Do | Token::Of | Token::Receive) {
+        if let Token::Where = token
+            && let Some(ctx) = self.ctx_stack.last()
+                && matches!(ctx.trigger, Token::Do | Token::Of | Token::Receive) {
                     self.ctx_stack.pop();
                     return Some((Token::RightBrace, span.start..span.start));
                 }
-            }
-        }
 
         match token {
             Token::RightParen | Token::RightSquare | Token::RightBrace => {

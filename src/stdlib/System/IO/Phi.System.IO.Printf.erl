@@ -23,6 +23,6 @@
 
 print(S) -> ?IO(io:format(S)).
 
-println(S) -> ?IO(io:format(S ++ "~n")).
+println(S) -> ?IO(io:format("~ts~n", [S])).
 
 println_(S) -> ?IO(io:format("~ts~n",[S])).

@@ -18,6 +18,7 @@
 
 %% FFI
 -export([ append/2
+        , concatImpl/1
         , cons/2
         , head/1
         , init/1
@@ -32,6 +33,11 @@
 
 -spec(append(list(), list()) -> list()).
 append(L1, L2) -> lists:append(L1, L2).
+
+-spec(concatImpl(list()) -> any()).
+concatImpl([]) -> [];
+concatImpl([H|_] = L) when is_binary(H) -> iolist_to_binary(L);
+concatImpl([H|_] = L) when is_list(H) -> lists:append(L).
 
 -spec(cons(any(), list()) -> list()).
 cons(H, T) -> [H|T].

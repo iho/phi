@@ -23,8 +23,9 @@
         ]).
 
 %% Atom -> String
--spec(showAtomImpl(atom()) -> string()).
-showAtomImpl(A) -> atom_to_list(A).
+-spec(showAtomImpl(any()) -> string()).
+showAtomImpl(A) when is_atom(A) -> atom_to_list(A);
+showAtomImpl(A) -> lists:flatten(io_lib:format("~p", [A])).
 
 %% Integer -> String
 -spec(showIntImpl(integer()) -> string()).

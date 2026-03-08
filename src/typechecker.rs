@@ -23,6 +23,12 @@ pub struct State {
     pub constraints: Vec<Constraint>,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         State {
@@ -752,8 +758,16 @@ pub fn build_env(module: &ast::Module, env: &mut Env) {
                 
                 for ctor in constructors {
                     let mut con_type = ret_type.clone();
-                    for field in ctor.fields.iter().rev() {
-                        con_type = MonoType::arrow(ast_to_type(&field.ty, env), con_type);
+                    let all_named = !ctor.fields.is_empty()
+                        && ctor.fields.iter().all(|f| f.name.is_some());
+                    if all_named {
+                        // Record constructor: single map argument → arity 1.
+                        // BEAM representation is {Tag, map}, matched with test_arity(2).
+                        con_type = MonoType::arrow(MonoType::Con("_RecordMap".to_string()), con_type);
+                    } else {
+                        for field in ctor.fields.iter().rev() {
+                            con_type = MonoType::arrow(ast_to_type(&field.ty, env), con_type);
+                        }
                     }
                     let vars: HashSet<String> = args.iter().cloned().collect();
                     env.extend(&mod_name, &ctor.name, PolyType { vars, ty: con_type }, Some(&mod_name));

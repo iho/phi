@@ -72,7 +72,9 @@ reverse = ffi1 :lists :reverse
 
 -- | Concat
 concat :: forall a. [[a]] -> [a]
-concat = ffi1 :lists :concat
+concat = concatImpl
+
+foreign import concatImpl :: forall a. [[a]] -> [a]
 
 filter :: forall a. (a -> Boolean) -> [a] -> [a]
 filter = ffi2 :lists :filter

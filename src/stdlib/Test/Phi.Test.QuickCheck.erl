@@ -24,7 +24,49 @@
         , uniform_s/1
         , randomRInt/2
         , randomRChar/2
+        , genPure/1
+        , genBind/2
+        , randomRIO/2
+        , isIO/1
+        , mapListImpl/2
+        , indexImpl/2
         ]).
+
+%% Gen monad pure: wrap value in a Gen that always returns it.
+genPure(V) -> {'Gen', fun(_, _) -> V end}.
+
+%% Gen monad bind: run Gen M, pass result to F, run the resulting Gen.
+genBind({'Gen', M}, F) ->
+    {'Gen', fun(I, R) ->
+        A = M(I, R),
+        try case F(A) of
+            {'Gen', G} -> G(I, R);
+            IOFun when is_function(IOFun, 0) -> IOFun()
+        end
+        catch E:Err ->
+            Msg = iolist_to_binary(io_lib:format("~p:~p", [E, Err])),
+            {'Result', #{ok => 'Nothing', stamp => [], arguments => [Msg]}}
+        end
+    end};
+genBind(_, _) ->
+    %% Non-Gen first argument (e.g. IO action from broken dispatch): return crash Gen.
+    {'Gen', fun(_, _) -> {'Result', #{ok => 'Nothing', stamp => [], arguments => [<<"gen_type_error">>]}} end}.
+
+%% isIO(V): true if V is a 0-arity fun (an IO action), false otherwise.
+isIO(V) -> is_function(V, 0).
+
+%% mapListImpl(F, Xs): map F over a list using lists:map.
+mapListImpl(F, Xs) -> lists:map(F, Xs).
+
+%% indexImpl(I, Xs): 0-indexed list access using lists:nth.
+indexImpl(I, Xs) -> lists:nth(I + 1, Xs).
+
+%% randomRIO(Lo, Hi) -> IO Integer: returns an IO action that picks a random integer in [Lo, Hi].
+randomRIO(Lo, Hi) ->
+    fun() ->
+        Range = Hi - Lo + 1,
+        Lo + (rand:uniform(Range) - 1)
+    end.
 
 -define(PRIME1, 30269).
 -define(PRIME2, 30307).
