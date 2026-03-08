@@ -19,16 +19,22 @@ mod type_sys;
 mod env;
 mod typechecker;
 mod beam_writer;
+mod asm_writer;
+mod ir;
+mod regalloc;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let search_paths: Vec<String> = if args.len() > 1 {
-        args[1..].to_vec()
-    } else {
-        vec![
-            "src/stdlib".to_string(),
-            "src/tests".to_string(),
-        ]
+    let search_paths: Vec<String> = {
+        let paths: Vec<String> = args[1..].iter()
+            .filter(|a| !a.starts_with("--"))
+            .cloned()
+            .collect();
+        if paths.is_empty() {
+            vec!["src/stdlib".to_string(), "src/tests".to_string()]
+        } else {
+            paths
+        }
     };
 
     // -----------------------------------------------------------------------
@@ -363,6 +369,39 @@ fn main() {
     let ffi_ok = ffi_ok_ctr.load(Ordering::Relaxed);
     println!("Erlang Companions Summary: {}/{} files compiled as .FFI.beam successfully.", ffi_ok, ffi_total);
 
+    // -----------------------------------------------------------------------
+    // Pass 4: AArch64 ASM codegen (--asm flag or always-on)
+    // -----------------------------------------------------------------------
+    if args.iter().any(|a| a == "--asm") || std::env::var("PHI_ASM").is_ok() {
+        println!("\n--- AArch64 ASM Codegen ---");
+        let asm_dir = "easm";
+        let _ = fs::create_dir_all(asm_dir);
+
+        // Emit runtime support file once
+        let runtime_path = format!("{}/phi_runtime.s", asm_dir);
+        let _ = fs::write(&runtime_path, asm_writer::emit_runtime());
+        println!("  Emitted: {}", runtime_path);
+
+        let asm_results: Vec<(String, String)> = modules
+            .par_iter()
+            .map(|module| {
+                let name = format!("Phi.{}", module.name);
+                let asm = asm_writer::generate_asm(module, &shared_env);
+                (name, asm)
+            })
+            .collect();
+
+        let mut asm_ok = 0usize;
+        for (mod_name, asm_text) in &asm_results {
+            let path = format!("{}/{}.s", asm_dir, mod_name);
+            if fs::write(&path, asm_text).is_ok() {
+                println!("  Emitted: {}.s", mod_name);
+                asm_ok += 1;
+            }
+        }
+        println!("  ASM: {}/{} modules emitted to {}/", asm_ok, asm_results.len(), asm_dir);
+        println!("  Link with: clang -arch arm64 easm/*.s -o phi_out");
+    }
 }
 
 fn parse_file(path: &Path) -> Result<ast::Module, ()> {

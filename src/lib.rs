@@ -1,5 +1,8 @@
+pub mod asm_writer;
 pub mod ast;
 pub mod beam_writer;
+pub mod ir;
+pub mod regalloc;
 pub mod env;
 pub mod layout;
 pub mod lexer;
