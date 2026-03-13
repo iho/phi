@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phi — Base Library Reference</title>
+    <script>
+        (function () {
+            var storedTheme = localStorage.getItem('phi-docs-theme');
+            var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        }());
+    </script>
+    <link id="theme-stylesheet" rel="stylesheet" href="index-light.css?v=6">
+    <script>
+        (function () {
+            var theme = document.documentElement.getAttribute('data-theme');
+            var stylesheet = document.getElementById('theme-stylesheet');
+            stylesheet.setAttribute('href', theme === 'dark' ? 'index-black.css?v=6' : 'index-light.css?v=6');
+        }());
+    </script>
+    <style>
+        .lib-nav {
+            position: sticky;
+            top: 60px;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+            padding: 1rem 0;
+            font-size: 0.85rem;
+            line-height: 1.8;
+        }
+        .lib-nav a {
+            display: block;
+            padding: 0.1rem 0;
+            text-decoration: none;
+            opacity: 0.7;
+        }
+        .lib-nav a:hover { opacity: 1; }
+        .lib-nav .nav-group {
+            font-weight: 700;
+            margin-top: 0.75rem;
+            margin-bottom: 0.2rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            opacity: 0.5;
+        }
+        .lib-layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+            align-items: start;
+        }
+        @media (max-width: 720px) {
+            .lib-layout { grid-template-columns: 1fr; }
+            .lib-nav { display: none; }
+        }
+        .lib-content section {
+            margin-bottom: 3.5rem;
+        }
+        .lib-content h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.4rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid rgba(128,128,128,0.2);
+        }
+        .lib-content h3 {
+            font-size: 1.05rem;
+            margin-top: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .module-intro {
+            opacity: 0.7;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+        }
+        .fn-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            margin-bottom: 0.5rem;
+        }
+        .fn-table tr + tr td {
+            border-top: 1px solid rgba(128,128,128,0.12);
+        }
+        .fn-table td {
+            padding: 0.45rem 0.6rem;
+            vertical-align: top;
+        }
+        .fn-table td:first-child {
+            font-family: monospace;
+            white-space: nowrap;
+            padding-right: 1rem;
+            font-size: 0.83rem;
+        }
+        .fn-table td:nth-child(2) {
+            font-family: monospace;
+            color: #777;
+            white-space: pre-wrap;
+            font-size: 0.78rem;
+        }
+        .fn-table td:last-child {
+            opacity: 0.65;
+            min-width: 180px;
+        }
+        [data-theme="dark"] .fn-table td:nth-child(2) { color: #888; }
+        .tag {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 0.05rem 0.4rem;
+            border-radius: 3px;
+            background: rgba(128,128,128,0.15);
+            margin-left: 0.4rem;
+            vertical-align: middle;
+            font-family: sans-serif;
+        }
+        .tag.class { background: rgba(100,149,237,0.2); }
+        .tag.data  { background: rgba(144,238,144,0.2); }
+    </style>
+</head>
+<body>
+    <nav class="sticky">
+        <div class="nav-container">
+            <a href="https://github.com/iho/phi" class="logo">Ф</a>
+            <div class="nav-actions">
+                <ul class="nav-links">
+                    <li><a href="index.html">Language</a></li>
+                    <li><a href="library.html">Library</a></li>
+                </ul>
+                <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle color theme">Dark</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="lib-layout">
+        <!-- Sidebar -->
+        <aside>
+            <nav class="lib-nav">
+                <div class="nav-group">Core</div>
+                <a href="#prelude">Prelude</a>
+
+                <div class="nav-group">Data</div>
+                <a href="#data-list">Data.List</a>
+                <a href="#data-maybe">Data.Maybe</a>
+                <a href="#data-either">Data.Either</a>
+                <a href="#data-map">Data.Map</a>
+                <a href="#data-set">Data.Set</a>
+                <a href="#data-string">Data.String</a>
+                <a href="#data-bool">Data.Bool</a>
+                <a href="#data-int">Data.Int / Float</a>
+                <a href="#data-char">Data.Char</a>
+                <a href="#data-tuple">Data.Tuple</a>
+                <a href="#data-array">Data.Array</a>
+                <a href="#data-queue">Data.Queue</a>
+                <a href="#data-binary">Data.Binary</a>
+                <a href="#data-bits">Data.Bits</a>
+                <a href="#data-pid">Data.Pid / Ref</a>
+
+                <div class="nav-group">Type Classes</div>
+                <a href="#class-eq">Eq / Ord</a>
+                <a href="#class-show">Show / Read</a>
+                <a href="#class-functor">Functor / Applicative</a>
+                <a href="#class-monad">Monad</a>
+                <a href="#class-foldable">Foldable / Traversable</a>
+                <a href="#class-semigroup">Semigroup / Monoid</a>
+                <a href="#class-semiring">Semiring / Ring</a>
+                <a href="#class-enum">Enum</a>
+
+                <div class="nav-group">Control</div>
+                <a href="#control-monad">Control.Monad</a>
+                <a href="#control-process">Control.Process</a>
+                <a href="#control-genserver">GenServer</a>
+                <a href="#control-supervisor">Supervisor</a>
+                <a href="#control-monad-rs">Reader / State / Writer</a>
+                <a href="#control-distributed">Distributed</a>
+
+                <div class="nav-group">System</div>
+                <a href="#system-io">System.IO</a>
+                <a href="#system-error">System.Error</a>
+                <a href="#system-file">System.File / Dir</a>
+                <a href="#system-timer">System.Timer</a>
+                <a href="#system-random">System.Random</a>
+                <a href="#system-vm">System.VM / OS / Env</a>
+
+                <div class="nav-group">Network</div>
+                <a href="#network-tcp">Network.TCP</a>
+                <a href="#network-udp">Network.UDP</a>
+                <a href="#network-tls">Network.TLS / DTLS</a>
+                <a href="#network-inet">Network.Inet</a>
+
+                <div class="nav-group">Database</div>
+                <a href="#database-ets">Database.ETS</a>
+                <a href="#database-dets">Database.DETS</a>
+                <a href="#database-mnesia">Database.Mnesia</a>
+
+                <div class="nav-group">Text</div>
+                <a href="#text-json">Text.Json</a>
+                <a href="#text-parsec">Text.Parsec</a>
+            </nav>
+        </aside>
+
+        <!-- Main content -->
+        <main class="lib-content">
+
+            <h1 style="margin-bottom:0.2rem">Base Library</h1>
+            <p style="opacity:0.6;margin-top:0;margin-bottom:2rem;">~198 modules. All modules live under <code>src/stdlib/</code> and compile directly to BEAM.</p>
+
+            <!-- ─── PRELUDE ─────────────────────────────────────────── -->
+            <section id="prelude">
+                <h2>Prelude</h2>
+                <p class="module-intro">Automatically available in every Phi module. Re-exports the most commonly used definitions from the standard library.</p>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">import Prelude  -- implicit in every module</pre>
+                <p class="module-intro">Includes: <code>Data.Bool</code>, <code>Data.Either</code>, <code>Data.Enum</code>, <code>Data.Eq</code>, <code>Data.Float</code>, <code>Data.Functor</code>, <code>Data.Function</code>, <code>Data.Int</code>, <code>Data.List</code>, <code>Data.Map</code>, <code>Data.Maybe</code>, <code>Data.Ord</code>, <code>Data.Pid</code>, <code>Data.Ref</code>, <code>Data.Ring</code>, <code>Data.Semigroup</code>, <code>Data.Semiring</code>, <code>Data.Show</code>, <code>Data.Read</code>, <code>Data.Tuple</code>, <code>Data.Foldable</code>, <code>Data.Traversable</code>, <code>Data.Unit</code>, <code>Data.Void</code>, <code>Control.Monad</code>, <code>Control.Process</code>, <code>System.Error</code>, <code>System.IO</code>.</p>
+            </section>
+
+            <!-- ─── DATA.LIST ──────────────────────────────────────── -->
+            <section id="data-list">
+                <h2>Data.List</h2>
+                <p class="module-intro">Singly-linked polymorphic lists. Backed by Erlang's native list type.</p>
+                <table class="fn-table">
+                    <tr><td>cons</td><td>a -&gt; [a] -&gt; [a]</td><td>Prepend element</td></tr>
+                    <tr><td>head</td><td>[a] -&gt; a</td><td>First element</td></tr>
+                    <tr><td>tail</td><td>[a] -&gt; [a]</td><td>All but first</td></tr>
+                    <tr><td>init</td><td>[a] -&gt; [a]</td><td>All but last</td></tr>
+                    <tr><td>last</td><td>[a] -&gt; a</td><td>Last element</td></tr>
+                    <tr><td>uncons</td><td>[a] -&gt; Maybe (a, [a])</td><td>Safe head/tail split</td></tr>
+                    <tr><td>length</td><td>[a] -&gt; Integer</td><td>Number of elements</td></tr>
+                    <tr><td>reverse</td><td>[a] -&gt; [a]</td><td>Reverse a list</td></tr>
+                    <tr><td>(++)</td><td>[a] -&gt; [a] -&gt; [a]</td><td>Append two lists</td></tr>
+                    <tr><td>concat</td><td>[[a]] -&gt; [a]</td><td>Flatten one level</td></tr>
+                    <tr><td>filter</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; [a]</td><td>Keep matching elements</td></tr>
+                    <tr><td>replicate</td><td>Integer -&gt; a -&gt; [a]</td><td>Repeat element n times</td></tr>
+                    <tr><td>take</td><td>Integer -&gt; [a] -&gt; [a]</td><td>First n elements</td></tr>
+                    <tr><td>drop</td><td>Integer -&gt; [a] -&gt; [a]</td><td>Remove first n elements</td></tr>
+                    <tr><td>takeWhile</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; [a]</td><td>Take while predicate holds</td></tr>
+                    <tr><td>dropWhile</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; [a]</td><td>Drop while predicate holds</td></tr>
+                    <tr><td>span</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; ([a], [a])</td><td>Split on predicate</td></tr>
+                    <tr><td>break</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; ([a], [a])</td><td>Split where predicate fails</td></tr>
+                    <tr><td>splitAt</td><td>Integer -&gt; [a] -&gt; ([a], [a])</td><td>Split at index</td></tr>
+                    <tr><td>partition</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; ([a], [a])</td><td>Partition by predicate</td></tr>
+                    <tr><td>zip</td><td>[a] -&gt; [b] -&gt; [(a, b)]</td><td>Zip two lists</td></tr>
+                    <tr><td>zip3</td><td>[a] -&gt; [b] -&gt; [c] -&gt; [(a,b,c)]</td><td>Zip three lists</td></tr>
+                    <tr><td>zipWith</td><td>(a -&gt; b -&gt; c) -&gt; [a] -&gt; [b] -&gt; [c]</td><td>Zip with function</td></tr>
+                    <tr><td>unzip</td><td>[(a, b)] -&gt; ([a], [b])</td><td>Unzip pairs</td></tr>
+                    <tr><td>sort</td><td>[a] -&gt; [a]</td><td>Sort (Erlang term order)</td></tr>
+                    <tr><td>usort</td><td>[a] -&gt; [a]</td><td>Sort, remove duplicates</td></tr>
+                    <tr><td>keysort</td><td>Integer -&gt; [(a,b)] -&gt; [(a,b)]</td><td>Sort by Nth tuple element</td></tr>
+                    <tr><td>member / elem</td><td>a -&gt; [a] -&gt; Boolean</td><td>Test membership</td></tr>
+                    <tr><td>notElem</td><td>a -&gt; [a] -&gt; Boolean</td><td>Test non-membership</td></tr>
+                    <tr><td>lookup</td><td>Eq a =&gt; a -&gt; [(a,b)] -&gt; Maybe b</td><td>Assoc-list lookup</td></tr>
+                    <tr><td>find</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; Maybe a</td><td>First matching element</td></tr>
+                    <tr><td>nub</td><td>[a] -&gt; [a]</td><td>Remove duplicates</td></tr>
+                    <tr><td>group</td><td>Eq a =&gt; [a] -&gt; [[a]]</td><td>Group equal adjacent</td></tr>
+                    <tr><td>intersperse</td><td>a -&gt; [a] -&gt; [a]</td><td>Insert element between</td></tr>
+                    <tr><td>intercalate</td><td>[a] -&gt; [[a]] -&gt; [a]</td><td>Join with separator</td></tr>
+                    <tr><td>transpose</td><td>[[a]] -&gt; [[a]]</td><td>Transpose rows/cols</td></tr>
+                    <tr><td>sum</td><td>Semiring a =&gt; [a] -&gt; a</td><td>Sum of elements</td></tr>
+                    <tr><td>product</td><td>Semiring a =&gt; [a] -&gt; a</td><td>Product of elements</td></tr>
+                    <tr><td>maximum</td><td>Ord a =&gt; [a] -&gt; a</td><td>Largest element</td></tr>
+                    <tr><td>minimum</td><td>Ord a =&gt; [a] -&gt; a</td><td>Smallest element</td></tr>
+                    <tr><td>all</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; Boolean</td><td>All satisfy predicate</td></tr>
+                    <tr><td>any</td><td>(a -&gt; Boolean) -&gt; [a] -&gt; Boolean</td><td>Any satisfies predicate</td></tr>
+                    <tr><td>(!!)</td><td>[a] -&gt; Integer -&gt; a</td><td>Index (0-based)</td></tr>
+                    <tr><td>elemIndex</td><td>Eq a =&gt; [a] -&gt; a -&gt; Maybe Integer</td><td>First index of element</td></tr>
+                    <tr><td>isPrefixOf</td><td>Eq a =&gt; [a] -&gt; [a] -&gt; Boolean</td><td>Prefix test</td></tr>
+                    <tr><td>isSuffixOf</td><td>Eq a =&gt; [a] -&gt; [a] -&gt; Boolean</td><td>Suffix test</td></tr>
+                    <tr><td>isInfixOf</td><td>Eq a =&gt; [a] -&gt; [a] -&gt; Boolean</td><td>Infix test</td></tr>
+                    <tr><td>unfoldr</td><td>(b -&gt; Maybe (a,b)) -&gt; b -&gt; [a]</td><td>Build list from seed</td></tr>
+                    <tr><td>permutations</td><td>[a] -&gt; [[a]]</td><td>All permutations</td></tr>
+                    <tr><td>subsequences</td><td>[a] -&gt; [[a]]</td><td>All subsequences</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.MAYBE ──────────────────────────────────────── -->
+            <section id="data-maybe">
+                <h2>Data.Maybe</h2>
+                <p class="module-intro">Optional values. Instances: <code>Functor</code>, <code>Applicative</code>, <code>Monad</code>, <code>Alternative</code>, <code>Foldable</code>, <code>Traversable</code>, <code>Semigroup</code>, <code>Monoid</code>, <code>Eq</code>.</p>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">data Maybe a = Nothing | Just a</pre>
+                <table class="fn-table">
+                    <tr><td>maybe</td><td>b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b</td><td>Case-eliminate a Maybe</td></tr>
+                    <tr><td>fromMaybe</td><td>a -&gt; Maybe a -&gt; a</td><td>Default if Nothing</td></tr>
+                    <tr><td>isJust</td><td>Maybe a -&gt; Boolean</td><td>True if Just</td></tr>
+                    <tr><td>isNothing</td><td>Maybe a -&gt; Boolean</td><td>True if Nothing</td></tr>
+                    <tr><td>fromJust</td><td>Maybe a -&gt; a</td><td>Unsafe extract (throws on Nothing)</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.EITHER ─────────────────────────────────────── -->
+            <section id="data-either">
+                <h2>Data.Either</h2>
+                <p class="module-intro">Values with two possible types — typically errors (<code>Left</code>) or success (<code>Right</code>). Instances: <code>Functor</code>, <code>Applicative</code>, <code>Monad</code>, <code>Foldable</code>, <code>Traversable</code>, <code>Eq</code>, <code>Ord</code>, <code>Semigroup</code>.</p>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">data Either a b = Left a | Right b</pre>
+                <table class="fn-table">
+                    <tr><td>either</td><td>(a -&gt; c) -&gt; (b -&gt; c) -&gt; Either a b -&gt; c</td><td>Case-eliminate an Either</td></tr>
+                    <tr><td>isLeft</td><td>Either a b -&gt; Boolean</td><td>True if Left</td></tr>
+                    <tr><td>isRight</td><td>Either a b -&gt; Boolean</td><td>True if Right</td></tr>
+                    <tr><td>fromLeft</td><td>Either a b -&gt; a</td><td>Unsafe Left extract</td></tr>
+                    <tr><td>fromRight</td><td>Either a b -&gt; b</td><td>Unsafe Right extract</td></tr>
+                    <tr><td>note</td><td>a -&gt; Maybe b -&gt; Either a b</td><td>Convert Maybe, supply Left</td></tr>
+                    <tr><td>hush</td><td>Either a b -&gt; Maybe b</td><td>Convert Either to Maybe</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.MAP ─────────────────────────────────────────── -->
+            <section id="data-map">
+                <h2>Data.Map</h2>
+                <p class="module-intro">Finite maps backed by Erlang's <code>maps</code> module. Instances: <code>Functor</code>, <code>Foldable</code>, <code>Traversable</code>, <code>Eq</code>, <code>Ord</code>, <code>Semigroup</code>, <code>Monoid</code>.</p>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">foreign import data Map :: Type -> Type -> Type</pre>
+                <table class="fn-table">
+                    <tr><td>empty</td><td>Map k v</td><td>Empty map</td></tr>
+                    <tr><td>singleton</td><td>k -&gt; v -&gt; Map k v</td><td>Single-entry map</td></tr>
+                    <tr><td>insert / put</td><td>k -&gt; v -&gt; Map k v -&gt; Map k v</td><td>Insert key-value</td></tr>
+                    <tr><td>get</td><td>k -&gt; Map k v -&gt; v</td><td>Lookup (throws if missing)</td></tr>
+                    <tr><td>lookup</td><td>k -&gt; Map k v -&gt; Maybe v</td><td>Safe lookup</td></tr>
+                    <tr><td>delete</td><td>k -&gt; Map k v -&gt; Map k v</td><td>Remove key</td></tr>
+                    <tr><td>update</td><td>k -&gt; v -&gt; Map k v -&gt; Map k v</td><td>Update existing key</td></tr>
+                    <tr><td>updateWith</td><td>k -&gt; (v -&gt; v) -&gt; Map k v -&gt; Map k v</td><td>Update with function</td></tr>
+                    <tr><td>member</td><td>k -&gt; Map k v -&gt; Boolean</td><td>Test membership</td></tr>
+                    <tr><td>isEmpty</td><td>Map k v -&gt; Boolean</td><td>Test if empty</td></tr>
+                    <tr><td>size</td><td>Map k v -&gt; Integer</td><td>Number of entries</td></tr>
+                    <tr><td>merge</td><td>Map k v -&gt; Map k v -&gt; Map k v</td><td>Merge two maps</td></tr>
+                    <tr><td>filter</td><td>((k,v) -&gt; Boolean) -&gt; Map k v -&gt; Map k v</td><td>Filter entries</td></tr>
+                    <tr><td>fold</td><td>((k,v,acc) -&gt; acc) -&gt; acc -&gt; Map k v -&gt; acc</td><td>Fold over entries</td></tr>
+                    <tr><td>keys</td><td>Map k v -&gt; [k]</td><td>List of keys</td></tr>
+                    <tr><td>values</td><td>Map k v -&gt; [v]</td><td>List of values</td></tr>
+                    <tr><td>fromList</td><td>[(k,v)] -&gt; Map k v</td><td>Build from list of pairs</td></tr>
+                    <tr><td>toList / assocs</td><td>Map k v -&gt; [(k,v)]</td><td>Convert to list of pairs</td></tr>
+                    <tr><td>with</td><td>[k] -&gt; Map k v -&gt; Map k v</td><td>Keep only given keys</td></tr>
+                    <tr><td>without</td><td>[k] -&gt; Map k v -&gt; Map k v</td><td>Remove given keys</td></tr>
+                    <tr><td>mapWithKey</td><td>((k,v) -&gt; v) -&gt; Map k v -&gt; Map k v</td><td>Map over values with key</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.SET ─────────────────────────────────────────── -->
+            <section id="data-set">
+                <h2>Data.Set</h2>
+                <p class="module-intro">Ordered sets backed by Erlang's <code>sets</code> module. Also see <code>Data.OrdSets</code> for ordered-set operations.</p>
+                <table class="fn-table">
+                    <tr><td>empty</td><td>Set a</td><td>Empty set</td></tr>
+                    <tr><td>singleton</td><td>a -&gt; Set a</td><td>Single-element set</td></tr>
+                    <tr><td>insert</td><td>a -&gt; Set a -&gt; Set a</td><td>Add element</td></tr>
+                    <tr><td>delete</td><td>a -&gt; Set a -&gt; Set a</td><td>Remove element</td></tr>
+                    <tr><td>member</td><td>a -&gt; Set a -&gt; Boolean</td><td>Test membership</td></tr>
+                    <tr><td>size</td><td>Set a -&gt; Integer</td><td>Cardinality</td></tr>
+                    <tr><td>union</td><td>Set a -&gt; Set a -&gt; Set a</td><td>Set union</td></tr>
+                    <tr><td>intersection</td><td>Set a -&gt; Set a -&gt; Set a</td><td>Set intersection</td></tr>
+                    <tr><td>difference</td><td>Set a -&gt; Set a -&gt; Set a</td><td>Set difference</td></tr>
+                    <tr><td>toList</td><td>Set a -&gt; [a]</td><td>Convert to list</td></tr>
+                    <tr><td>fromList</td><td>[a] -&gt; Set a</td><td>Build from list</td></tr>
+                    <tr><td>filter</td><td>(a -&gt; Boolean) -&gt; Set a -&gt; Set a</td><td>Filter elements</td></tr>
+                    <tr><td>fold</td><td>(a -&gt; b -&gt; b) -&gt; b -&gt; Set a -&gt; b</td><td>Fold over set</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.STRING ──────────────────────────────────────── -->
+            <section id="data-string">
+                <h2>Data.String</h2>
+                <p class="module-intro">UTF-8 string operations backed by Erlang's <code>string</code> module. In Phi, <code>String</code> is an alias for a Unicode character list.</p>
+                <table class="fn-table">
+                    <tr><td>(++)</td><td>String -&gt; String -&gt; String</td><td>Concatenate</td></tr>
+                    <tr><td>length</td><td>String -&gt; Integer</td><td>Character count</td></tr>
+                    <tr><td>isEmpty</td><td>String -&gt; Boolean</td><td>Test if empty</td></tr>
+                    <tr><td>reverse</td><td>String -&gt; String</td><td>Reverse string</td></tr>
+                    <tr><td>equal</td><td>String -&gt; String -&gt; Boolean</td><td>Case-sensitive equality</td></tr>
+                    <tr><td>equalIgnoreCase</td><td>String -&gt; String -&gt; Boolean</td><td>Case-insensitive equality</td></tr>
+                    <tr><td>startsWith</td><td>String -&gt; Prefix -&gt; Boolean</td><td>Prefix test</td></tr>
+                    <tr><td>endsWith</td><td>String -&gt; Suffix -&gt; Boolean</td><td>Suffix test</td></tr>
+                    <tr><td>indexOf</td><td>Char -&gt; String -&gt; Integer</td><td>First index of char</td></tr>
+                    <tr><td>find</td><td>String -&gt; Pattern -&gt; Maybe String</td><td>Find pattern</td></tr>
+                    <tr><td>replace</td><td>String -&gt; Pattern -&gt; Replacement -&gt; [String]</td><td>Replace all occurrences</td></tr>
+                    <tr><td>split</td><td>String -&gt; String -&gt; [String]</td><td>Split on delimiter</td></tr>
+                    <tr><td>join</td><td>[String] -&gt; String -&gt; String</td><td>Join with separator</td></tr>
+                    <tr><td>lines</td><td>String -&gt; [String]</td><td>Split on newlines</td></tr>
+                    <tr><td>words</td><td>String -&gt; [String]</td><td>Split on whitespace</td></tr>
+                    <tr><td>take</td><td>Integer -&gt; String -&gt; String</td><td>First n characters</td></tr>
+                    <tr><td>drop</td><td>Integer -&gt; String -&gt; String</td><td>Skip first n characters</td></tr>
+                    <tr><td>toLower</td><td>String -&gt; String</td><td>Lowercase</td></tr>
+                    <tr><td>toUpper</td><td>String -&gt; String</td><td>Uppercase</td></tr>
+                    <tr><td>toTitle</td><td>String -&gt; String</td><td>Titlecase</td></tr>
+                    <tr><td>caseFold</td><td>String -&gt; String</td><td>Case-agnostic form</td></tr>
+                    <tr><td>trim</td><td>String -&gt; String</td><td>Trim whitespace both ends</td></tr>
+                    <tr><td>trimLeft</td><td>String -&gt; String</td><td>Trim leading whitespace</td></tr>
+                    <tr><td>trimRight</td><td>String -&gt; String</td><td>Trim trailing whitespace</td></tr>
+                    <tr><td>chomp</td><td>String -&gt; String</td><td>Remove trailing newline</td></tr>
+                    <tr><td>pad / padLeft / padBoth</td><td>String -&gt; Integer -&gt; String</td><td>Pad to width</td></tr>
+                    <tr><td>replicate</td><td>Integer -&gt; String -&gt; String</td><td>Repeat string n times</td></tr>
+                    <tr><td>toAtom</td><td>String -&gt; Atom</td><td>Convert to atom</td></tr>
+                    <tr><td>toInteger</td><td>String -&gt; Integer</td><td>Parse integer</td></tr>
+                    <tr><td>toFloat</td><td>String -&gt; Float</td><td>Parse float</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.BOOL / INT / FLOAT ─────────────────────────── -->
+            <section id="data-bool">
+                <h2>Data.Bool &amp; Numeric Types</h2>
+                <h3>Data.Bool</h3>
+                <table class="fn-table">
+                    <tr><td>(&&)</td><td>Boolean -&gt; Boolean -&gt; Boolean</td><td>Logical AND</td></tr>
+                    <tr><td>(||)</td><td>Boolean -&gt; Boolean -&gt; Boolean</td><td>Logical OR</td></tr>
+                    <tr><td>not</td><td>Boolean -&gt; Boolean</td><td>Logical NOT</td></tr>
+                    <tr><td>and</td><td>[Boolean] -&gt; Boolean</td><td>All true</td></tr>
+                    <tr><td>or</td><td>[Boolean] -&gt; Boolean</td><td>Any true</td></tr>
+                    <tr><td>otherwise</td><td>Boolean</td><td>Always <code>true</code> (for guards)</td></tr>
+                </table>
+                <h3 id="data-int">Data.Int / Data.Float</h3>
+                <table class="fn-table">
+                    <tr><td>Int / Integer</td><td>Type</td><td>Arbitrary precision integer</td></tr>
+                    <tr><td>Double / Float</td><td>Type</td><td>IEEE 754 double</td></tr>
+                    <tr><td>abs</td><td>Integer -&gt; Integer</td><td>Absolute value</td></tr>
+                    <tr><td>div / mod</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Integer division / modulo</td></tr>
+                    <tr><td>round / floor / ceil / trunc</td><td>Double -&gt; Integer</td><td>Rounding</td></tr>
+                    <tr><td>sqrt / log / exp</td><td>Double -&gt; Double</td><td>Math functions</td></tr>
+                    <tr><td>sin / cos / tan</td><td>Double -&gt; Double</td><td>Trigonometry</td></tr>
+                    <tr><td>toFloat</td><td>Integer -&gt; Double</td><td>Coerce to float</td></tr>
+                    <tr><td>toInteger</td><td>Double -&gt; Integer</td><td>Truncate to integer</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.CHAR ────────────────────────────────────────── -->
+            <section id="data-char">
+                <h2>Data.Char</h2>
+                <p class="module-intro">Unicode character operations.</p>
+                <table class="fn-table">
+                    <tr><td>isAlpha</td><td>Char -&gt; Boolean</td><td>Alphabetic character test</td></tr>
+                    <tr><td>isAlphaNum</td><td>Char -&gt; Boolean</td><td>Alphanumeric test</td></tr>
+                    <tr><td>isDigit</td><td>Char -&gt; Boolean</td><td>Decimal digit test</td></tr>
+                    <tr><td>isLower</td><td>Char -&gt; Boolean</td><td>Lowercase test</td></tr>
+                    <tr><td>isUpper</td><td>Char -&gt; Boolean</td><td>Uppercase test</td></tr>
+                    <tr><td>isSpace</td><td>Char -&gt; Boolean</td><td>Whitespace test</td></tr>
+                    <tr><td>toLower</td><td>Char -&gt; Char</td><td>To lowercase</td></tr>
+                    <tr><td>toUpper</td><td>Char -&gt; Char</td><td>To uppercase</td></tr>
+                    <tr><td>digitToInt</td><td>Char -&gt; Integer</td><td>Digit char to integer</td></tr>
+                    <tr><td>ord</td><td>Char -&gt; Integer</td><td>Unicode code point</td></tr>
+                    <tr><td>chr</td><td>Integer -&gt; Char</td><td>Code point to char</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.TUPLE ───────────────────────────────────────── -->
+            <section id="data-tuple">
+                <h2>Data.Tuple</h2>
+                <table class="fn-table">
+                    <tr><td>fst</td><td>(a, b) -&gt; a</td><td>First of pair</td></tr>
+                    <tr><td>snd</td><td>(a, b) -&gt; b</td><td>Second of pair</td></tr>
+                    <tr><td>curry</td><td>((a,b) -&gt; c) -&gt; a -&gt; b -&gt; c</td><td>Curry a function on pairs</td></tr>
+                    <tr><td>uncurry</td><td>(a -&gt; b -&gt; c) -&gt; (a,b) -&gt; c</td><td>Uncurry a function</td></tr>
+                    <tr><td>swap</td><td>(a, b) -&gt; (b, a)</td><td>Swap pair elements</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.ARRAY ───────────────────────────────────────── -->
+            <section id="data-array">
+                <h2>Data.Array</h2>
+                <p class="module-intro">Mutable arrays backed by Erlang's <code>array</code> module. O(1) indexed access.</p>
+                <table class="fn-table">
+                    <tr><td>new</td><td>Array a</td><td>New empty array</td></tr>
+                    <tr><td>newWith</td><td>Integer -&gt; a -&gt; Array a</td><td>Fixed-size array with default</td></tr>
+                    <tr><td>get</td><td>Integer -&gt; Array a -&gt; a</td><td>Read element at index</td></tr>
+                    <tr><td>set</td><td>Integer -&gt; a -&gt; Array a -&gt; Array a</td><td>Write element at index</td></tr>
+                    <tr><td>size</td><td>Array a -&gt; Integer</td><td>Array size</td></tr>
+                    <tr><td>toList</td><td>Array a -&gt; [a]</td><td>Convert to list</td></tr>
+                    <tr><td>fromList</td><td>[a] -&gt; Array a</td><td>Build from list</td></tr>
+                    <tr><td>map</td><td>(a -&gt; b) -&gt; Array a -&gt; Array b</td><td>Map over elements</td></tr>
+                    <tr><td>foldl</td><td>(b -&gt; a -&gt; b) -&gt; b -&gt; Array a -&gt; b</td><td>Left fold</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.QUEUE ───────────────────────────────────────── -->
+            <section id="data-queue">
+                <h2>Data.Queue</h2>
+                <p class="module-intro">Double-ended queues backed by Erlang's <code>queue</code> module.</p>
+                <table class="fn-table">
+                    <tr><td>empty</td><td>Queue a</td><td>Empty queue</td></tr>
+                    <tr><td>isEmpty</td><td>Queue a -&gt; Boolean</td><td>Test if empty</td></tr>
+                    <tr><td>in' / snoc</td><td>a -&gt; Queue a -&gt; Queue a</td><td>Enqueue at rear</td></tr>
+                    <tr><td>out / uncons</td><td>Queue a -&gt; Maybe (a, Queue a)</td><td>Dequeue from front</td></tr>
+                    <tr><td>peek / head</td><td>Queue a -&gt; Maybe a</td><td>Front element without removing</td></tr>
+                    <tr><td>size / len</td><td>Queue a -&gt; Integer</td><td>Number of elements</td></tr>
+                    <tr><td>toList</td><td>Queue a -&gt; [a]</td><td>Convert to list</td></tr>
+                    <tr><td>fromList</td><td>[a] -&gt; Queue a</td><td>Build from list</td></tr>
+                    <tr><td>reverse</td><td>Queue a -&gt; Queue a</td><td>Reverse the queue</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.BINARY ──────────────────────────────────────── -->
+            <section id="data-binary">
+                <h2>Data.Binary</h2>
+                <p class="module-intro">Binary/byte-string operations backed by Erlang's <code>binary</code> module.</p>
+                <table class="fn-table">
+                    <tr><td>empty</td><td>Binary</td><td>Empty binary</td></tr>
+                    <tr><td>size</td><td>Binary -&gt; Integer</td><td>Byte length</td></tr>
+                    <tr><td>append</td><td>Binary -&gt; Binary -&gt; Binary</td><td>Concatenate</td></tr>
+                    <tr><td>split</td><td>Binary -&gt; Binary -&gt; [Binary]</td><td>Split on pattern</td></tr>
+                    <tr><td>part</td><td>Binary -&gt; Integer -&gt; Integer -&gt; Binary</td><td>Extract sub-binary</td></tr>
+                    <tr><td>copy</td><td>Binary -&gt; Binary</td><td>Force copy</td></tr>
+                    <tr><td>toList</td><td>Binary -&gt; [Integer]</td><td>Convert to byte list</td></tr>
+                    <tr><td>fromList</td><td>[Integer] -&gt; Binary</td><td>Build from byte list</td></tr>
+                    <tr><td>toString</td><td>Binary -&gt; String</td><td>Decode UTF-8</td></tr>
+                    <tr><td>fromString</td><td>String -&gt; Binary</td><td>Encode to UTF-8</td></tr>
+                </table>
+                <h3>Data.Binary.Base64</h3>
+                <table class="fn-table">
+                    <tr><td>encode</td><td>Binary -&gt; Binary</td><td>Base64 encode</td></tr>
+                    <tr><td>decode</td><td>Binary -&gt; Binary</td><td>Base64 decode</td></tr>
+                    <tr><td>mimeEncode</td><td>Binary -&gt; Binary</td><td>MIME Base64 encode</td></tr>
+                    <tr><td>mimeDecode</td><td>Binary -&gt; Binary</td><td>MIME Base64 decode</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.BITS ─────────────────────────────────────────── -->
+            <section id="data-bits">
+                <h2>Data.Bits</h2>
+                <table class="fn-table">
+                    <tr><td>band</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Bitwise AND</td></tr>
+                    <tr><td>bor</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Bitwise OR</td></tr>
+                    <tr><td>bxor</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Bitwise XOR</td></tr>
+                    <tr><td>bnot</td><td>Integer -&gt; Integer</td><td>Bitwise NOT</td></tr>
+                    <tr><td>bsl</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Bit shift left</td></tr>
+                    <tr><td>bsr</td><td>Integer -&gt; Integer -&gt; Integer</td><td>Bit shift right</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATA.PID / REF ────────────────────────────────────── -->
+            <section id="data-pid">
+                <h2>Data.Pid / Data.Ref</h2>
+                <table class="fn-table">
+                    <tr><td>Pid</td><td>Type</td><td>BEAM process identifier</td></tr>
+                    <tr><td>Ref / Reference</td><td>Type</td><td>BEAM unique reference</td></tr>
+                    <tr><td>makeRef</td><td>IO Reference</td><td>Create a fresh unique reference</td></tr>
+                    <tr><td>pidToList</td><td>Pid -&gt; String</td><td>Pid as string</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── TYPE CLASSES ─────────────────────────────────────── -->
+            <section id="class-eq">
+                <h2>Eq / Ord</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Eq a where
+  eq :: a -> a -> Boolean
+
+class Eq a => Ord a where
+  compare :: a -> a -> Ordering   -- LT | EQ | GT</pre>
+                <table class="fn-table">
+                    <tr><td>(==) / eq</td><td>Eq a =&gt; a -&gt; a -&gt; Boolean</td><td>Equality</td></tr>
+                    <tr><td>(/=) / notEq</td><td>Eq a =&gt; a -&gt; a -&gt; Boolean</td><td>Inequality</td></tr>
+                    <tr><td>compare</td><td>Ord a =&gt; a -&gt; a -&gt; Ordering</td><td>Three-way compare</td></tr>
+                    <tr><td>(&lt;) (&lt;=) (&gt;) (&gt;=)</td><td>Ord a =&gt; a -&gt; a -&gt; Boolean</td><td>Comparison operators</td></tr>
+                    <tr><td>max / min</td><td>Ord a =&gt; a -&gt; a -&gt; a</td><td>Maximum / minimum</td></tr>
+                    <tr><td>between</td><td>Ord a =&gt; a -&gt; a -&gt; a -&gt; Boolean</td><td>Range test</td></tr>
+                    <tr><td>comparing</td><td>Ord b =&gt; (a -&gt; b) -&gt; a -&gt; a -&gt; Ordering</td><td>Compare via projection</td></tr>
+                </table>
+            </section>
+
+            <section id="class-show">
+                <h2>Show / Read</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Show a where
+  show :: a -> String
+
+class Read a where
+  read :: String -> a</pre>
+                <table class="fn-table">
+                    <tr><td>show</td><td>Show a =&gt; a -&gt; String</td><td>Convert value to string</td></tr>
+                    <tr><td>showAny</td><td>a -&gt; String</td><td>Show without constraint</td></tr>
+                    <tr><td>read</td><td>Read a =&gt; String -&gt; a</td><td>Parse value from string</td></tr>
+                </table>
+            </section>
+
+            <section id="class-functor">
+                <h2>Functor / Applicative / Alternative</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Functor f where
+  map :: (a -> b) -> f a -> f b
+
+class Functor f => Applicative f where
+  pure  :: a -> f a
+  apply :: f (a -> b) -> f a -> f b
+
+class Applicative f => Alternative f where
+  empty  :: f a
+  append :: f a -> f a -> f a</pre>
+                <table class="fn-table">
+                    <tr><td>map / (&lt;$&gt;)</td><td>Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b</td><td>Map over a functor</td></tr>
+                    <tr><td>pure</td><td>Applicative f =&gt; a -&gt; f a</td><td>Lift a value</td></tr>
+                    <tr><td>apply / (&lt;*&gt;)</td><td>Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b</td><td>Applicative apply</td></tr>
+                    <tr><td>liftA1</td><td>Applicative f =&gt; (a -&gt; b) -&gt; f a -&gt; f b</td><td>Lift unary function</td></tr>
+                    <tr><td>liftA2</td><td>Applicative f =&gt; (a -&gt; b -&gt; c) -&gt; f a -&gt; f b -&gt; f c</td><td>Lift binary function</td></tr>
+                    <tr><td>(&lt;|&gt;)</td><td>Alternative f =&gt; f a -&gt; f a -&gt; f a</td><td>Alternative choice</td></tr>
+                </table>
+            </section>
+
+            <section id="class-monad">
+                <h2>Monad</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Applicative m => Monad m where
+  bind :: m a -> (a -> m b) -> m b
+
+-- do-notation desugars to bind / discard
+main = do
+  x &lt;- action
+  pure x</pre>
+                <table class="fn-table">
+                    <tr><td>bind / (&gt;&gt;=)</td><td>Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b</td><td>Monadic bind</td></tr>
+                    <tr><td>discard</td><td>Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b</td><td>Bind discarding value (used by do-notation)</td></tr>
+                    <tr><td>join</td><td>Monad m =&gt; m (m a) -&gt; m a</td><td>Flatten nested monad</td></tr>
+                    <tr><td>void</td><td>Monad m =&gt; m a -&gt; m ()</td><td>Discard result</td></tr>
+                    <tr><td>when</td><td>Monad m =&gt; Boolean -&gt; m () -&gt; m ()</td><td>Conditional action</td></tr>
+                    <tr><td>unless</td><td>Monad m =&gt; Boolean -&gt; m () -&gt; m ()</td><td>Negative conditional action</td></tr>
+                    <tr><td>foldM</td><td>Monad m =&gt; (a -&gt; b -&gt; m a) -&gt; a -&gt; [b] -&gt; m a</td><td>Monadic fold</td></tr>
+                    <tr><td>filterM</td><td>Monad m =&gt; (a -&gt; m Boolean) -&gt; [a] -&gt; m [a]</td><td>Monadic filter</td></tr>
+                    <tr><td>(&gt;=&gt;)</td><td>Monad m =&gt; (a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c</td><td>Kleisli composition</td></tr>
+                    <tr><td>seqio</td><td>[IO a] -&gt; IO [a]</td><td>Sequence IO actions, collect results</td></tr>
+                    <tr><td>seqio_</td><td>[IO a] -&gt; IO ()</td><td>Sequence IO actions, discard results</td></tr>
+                    <tr><td>IO</td><td>Type -&gt; Type</td><td>IO monad for effectful actions</td></tr>
+                </table>
+            </section>
+
+            <section id="class-foldable">
+                <h2>Foldable / Traversable</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Foldable t where
+  foldl   :: (b -> a -> b) -> b -> t a -> b
+  foldr   :: (a -> b -> b) -> b -> t a -> b
+  foldMap :: Monoid m => (a -> m) -> t a -> m
+
+class (Functor t, Foldable t) => Traversable t where
+  traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
+  sequence :: Applicative f => t (f a) -> f (t a)</pre>
+                <p class="module-intro">Instances: <code>List</code>, <code>Maybe</code>, <code>Either a</code>, <code>Map k</code>.</p>
+            </section>
+
+            <section id="class-semigroup">
+                <h2>Semigroup / Monoid</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Semigroup a where
+  append :: a -> a -> a   -- also written (&lt;&gt;)
+
+class Semigroup a => Monoid a where
+  mempty :: a</pre>
+                <table class="fn-table">
+                    <tr><td>(&lt;&gt;) / append</td><td>Semigroup a =&gt; a -&gt; a -&gt; a</td><td>Associative binary operation</td></tr>
+                    <tr><td>mempty</td><td>Monoid a =&gt; a</td><td>Identity element</td></tr>
+                    <tr><td>mconcat</td><td>Monoid a =&gt; [a] -&gt; a</td><td>Fold with mappend</td></tr>
+                </table>
+            </section>
+
+            <section id="class-semiring">
+                <h2>Semiring / Ring</h2>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class Semiring a where
+  add :: a -> a -> a   -- (+)
+  mul :: a -> a -> a   -- (*)
+  zero :: a
+  one  :: a
+
+class Semiring a => Ring a where
+  negate :: a -> a   -- unary minus</pre>
+            </section>
+
+            <section id="class-enum">
+                <h2>Enum</h2>
+                <table class="fn-table">
+                    <tr><td>succ</td><td>Enum a =&gt; a -&gt; a</td><td>Successor</td></tr>
+                    <tr><td>pred</td><td>Enum a =&gt; a -&gt; a</td><td>Predecessor</td></tr>
+                    <tr><td>range</td><td>Enum a =&gt; a -&gt; a -&gt; [a]</td><td>Inclusive range</td></tr>
+                    <tr><td>rangeStep</td><td>Enum a =&gt; a -&gt; a -&gt; a -&gt; [a]</td><td>Range with step</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── CONTROL.MONAD ─────────────────────────────────────── -->
+            <section id="control-monad">
+                <h2>Control.Monad</h2>
+                <p class="module-intro">See the <a href="#class-monad">Monad type class section</a> above. Additional utilities:</p>
+                <table class="fn-table">
+                    <tr><td>unsafePerformIO</td><td>IO a -&gt; a</td><td>Break out of IO (unsafe!)</td></tr>
+                    <tr><td>replApply</td><td>a -&gt; a</td><td>REPL helper</td></tr>
+                    <tr><td>guard</td><td>MonadPlus m =&gt; Boolean -&gt; m ()</td><td>Fail if false</td></tr>
+                    <tr><td>msum</td><td>MonadPlus m =&gt; [m a] -&gt; m a</td><td>First succeeding action</td></tr>
+                    <tr><td>mfilter</td><td>MonadPlus m =&gt; (a -&gt; Boolean) -&gt; m a -&gt; m a</td><td>Monadic filter</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── CONTROL.PROCESS ───────────────────────────────────── -->
+            <section id="control-process">
+                <h2>Control.Process</h2>
+                <p class="module-intro">Erlang actor model. <code>Process a</code> is the monad for concurrent process code (an alias for <code>IO a</code> targeting BEAM).</p>
+                <table class="fn-table">
+                    <tr><td>getSelf</td><td>Process Pid</td><td>Current process's Pid</td></tr>
+                    <tr><td>isAlive</td><td>Pid -&gt; Process Boolean</td><td>Check if process is alive</td></tr>
+                    <tr><td>send / (!)</td><td>Pid -&gt; a -&gt; Process ()</td><td>Send a message</td></tr>
+                    <tr><td>spawn</td><td>Process () -&gt; Process Pid</td><td>Spawn a new process</td></tr>
+                    <tr><td>spawnLink</td><td>Process () -&gt; Process Pid</td><td>Spawn and link</td></tr>
+                    <tr><td>spawnMonitor</td><td>Process () -&gt; Process (Pid, Reference)</td><td>Spawn and monitor</td></tr>
+                    <tr><td>link / unlink</td><td>Pid -&gt; Process ()</td><td>Link / unlink processes</td></tr>
+                    <tr><td>monitor / demonitor</td><td>Pid -&gt; Process Reference</td><td>Monitor / stop monitoring</td></tr>
+                    <tr><td>register</td><td>Atom -&gt; Pid -&gt; Process ()</td><td>Register process name</td></tr>
+                    <tr><td>unregister</td><td>Atom -&gt; Process ()</td><td>Unregister name</td></tr>
+                    <tr><td>whereis</td><td>Atom -&gt; Process (Maybe Pid)</td><td>Lookup registered process</td></tr>
+                    <tr><td>registered</td><td>Process [Atom]</td><td>All registered names</td></tr>
+                    <tr><td>exit</td><td>Atom -&gt; Process ()</td><td>Exit current process</td></tr>
+                    <tr><td>exitProc</td><td>Pid -&gt; Atom -&gt; Process ()</td><td>Send exit signal</td></tr>
+                    <tr><td>killProc</td><td>Pid -&gt; Process ()</td><td>Kill a process</td></tr>
+                    <tr><td>timerSleep</td><td>Integer -&gt; IO ()</td><td>Sleep milliseconds</td></tr>
+                    <tr><td>yield</td><td>Process ()</td><td>Yield scheduler</td></tr>
+                    <tr><td>suspend / resume</td><td>Pid -&gt; Process ()</td><td>Suspend / resume process</td></tr>
+                    <tr><td>garbageCollect</td><td>Process ()</td><td>Force GC on self</td></tr>
+                    <tr><td>processFlag / trapExit</td><td>—</td><td>Process flags</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── GENSERVER ─────────────────────────────────────────── -->
+            <section id="control-genserver">
+                <h2>Control.Behaviour.GenServer</h2>
+                <p class="module-intro">OTP <code>gen_server</code> expressed as a type class. Implement <code>handleCall</code> and <code>handleCast</code> in a <code>GenServer</code> instance.</p>
+                <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">class GenServer req rep st | req -> rep, rep -> st, st -> req where
+  handleCall :: HandleCall req rep st
+  handleCast :: HandleCast req rep st</pre>
+                <h3>Starting / stopping</h3>
+                <table class="fn-table">
+                    <tr><td>start</td><td>GenServer req rep st =&gt; Init req st -&gt; Process Pid</td><td>Start standalone server</td></tr>
+                    <tr><td>startWith</td><td>… =&gt; Name -&gt; Init req st -&gt; Process Pid</td><td>Start with registered name</td></tr>
+                    <tr><td>startLink</td><td>… =&gt; Init req st -&gt; Process Pid</td><td>Start under supervisor</td></tr>
+                    <tr><td>startLinkWith</td><td>… =&gt; Name -&gt; Init req st -&gt; Process Pid</td><td>Start under supervisor with name</td></tr>
+                    <tr><td>startMonitor</td><td>… =&gt; Init req st -&gt; Process (Pid, Reference)</td><td>Start and monitor</td></tr>
+                    <tr><td>stop / stopPid</td><td>Name/Pid -&gt; Process ()</td><td>Stop server</td></tr>
+                </table>
+                <h3>Client API</h3>
+                <table class="fn-table">
+                    <tr><td>call</td><td>Name -&gt; req -&gt; Process rep</td><td>Synchronous call by name</td></tr>
+                    <tr><td>callTo</td><td>Pid -&gt; req -&gt; Process rep</td><td>Synchronous call by Pid</td></tr>
+                    <tr><td>cast</td><td>Name -&gt; req -&gt; Process ()</td><td>Async cast by name</td></tr>
+                    <tr><td>castTo</td><td>Pid -&gt; req -&gt; Process ()</td><td>Async cast by Pid</td></tr>
+                    <tr><td>abcast</td><td>Name -&gt; req -&gt; Process ()</td><td>Broadcast async to all nodes</td></tr>
+                    <tr><td>multiCall</td><td>Name -&gt; req -&gt; Process (Replies rep)</td><td>Multi-node synchronous call</td></tr>
+                </table>
+                <h3>Init / reply helpers</h3>
+                <table class="fn-table">
+                    <tr><td>initOk</td><td>st -&gt; Process (InitResult req st)</td><td>Successful init</td></tr>
+                    <tr><td>initIgnore</td><td>Process (InitResult req st)</td><td>Ignore start</td></tr>
+                    <tr><td>initStop</td><td>ExitReason -&gt; Process (InitResult req st)</td><td>Fail on start</td></tr>
+                    <tr><td>reply</td><td>rep -&gt; st -&gt; Process (Reply req rep st)</td><td>Reply to caller</td></tr>
+                    <tr><td>noReply</td><td>st -&gt; Process (Reply req rep st)</td><td>No reply, update state</td></tr>
+                    <tr><td>shutdown</td><td>Atom -&gt; st -&gt; Process (Reply req rep st)</td><td>Stop server</td></tr>
+                    <tr><td>replyTo</td><td>From -&gt; rep -&gt; Process ()</td><td>Explicit late reply</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SUPERVISOR ────────────────────────────────────────── -->
+            <section id="control-supervisor">
+                <h2>Control.Behaviour.Supervisor</h2>
+                <p class="module-intro">OTP <code>supervisor</code> behaviour. Define a supervision tree by implementing the <code>Supervisor</code> class.</p>
+                <table class="fn-table">
+                    <tr><td>startLink</td><td>Supervisor st =&gt; Init st -&gt; Process Pid</td><td>Start supervisor</td></tr>
+                    <tr><td>startLinkWith</td><td>… =&gt; Name -&gt; Init st -&gt; Process Pid</td><td>Named supervisor</td></tr>
+                    <tr><td>startChild</td><td>Pid -&gt; ChildSpec -&gt; Process ()</td><td>Add child dynamically</td></tr>
+                    <tr><td>terminateChild</td><td>Pid -&gt; Atom -&gt; Process ()</td><td>Terminate a child</td></tr>
+                    <tr><td>restartChild</td><td>Pid -&gt; Atom -&gt; Process ()</td><td>Restart a child</td></tr>
+                    <tr><td>deleteChild</td><td>Pid -&gt; Atom -&gt; Process ()</td><td>Remove a child spec</td></tr>
+                    <tr><td>countChildren</td><td>Pid -&gt; Process ChildCounts</td><td>Count supervised children</td></tr>
+                    <tr><td>whichChildren</td><td>Pid -&gt; Process [ChildInfo]</td><td>List supervised children</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── MONAD TRANSFORMERS ──────────────────────────────── -->
+            <section id="control-monad-rs">
+                <h2>Control.Monad.Reader / State / Writer</h2>
+                <table class="fn-table">
+                    <tr><td>ask</td><td>Reader r r</td><td>Read the environment</td></tr>
+                    <tr><td>asks</td><td>(r -&gt; a) -&gt; Reader r a</td><td>Map over environment</td></tr>
+                    <tr><td>local</td><td>(r -&gt; r) -&gt; Reader r a -&gt; Reader r a</td><td>Run with modified env</td></tr>
+                    <tr><td>runReader</td><td>Reader r a -&gt; r -&gt; a</td><td>Run Reader computation</td></tr>
+                    <tr><td>get</td><td>State s s</td><td>Read state</td></tr>
+                    <tr><td>put</td><td>s -&gt; State s ()</td><td>Write state</td></tr>
+                    <tr><td>modify</td><td>(s -&gt; s) -&gt; State s ()</td><td>Update state</td></tr>
+                    <tr><td>runState</td><td>State s a -&gt; s -&gt; (a, s)</td><td>Run State computation</td></tr>
+                    <tr><td>tell</td><td>w -&gt; Writer w ()</td><td>Append to log</td></tr>
+                    <tr><td>listen</td><td>Writer w a -&gt; Writer w (a, w)</td><td>Capture output</td></tr>
+                    <tr><td>runWriter</td><td>Writer w a -&gt; (a, w)</td><td>Run Writer computation</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DISTRIBUTED ───────────────────────────────────────── -->
+            <section id="control-distributed">
+                <h2>Control.Distributed</h2>
+                <h3>Control.Distributed.Node</h3>
+                <table class="fn-table">
+                    <tr><td>self</td><td>Process Node</td><td>Current node name</td></tr>
+                    <tr><td>isAlive</td><td>Process Boolean</td><td>Is the node alive?</td></tr>
+                    <tr><td>connect</td><td>Node -&gt; Process Boolean</td><td>Connect to a node</td></tr>
+                    <tr><td>disconnect</td><td>Node -&gt; Process Boolean</td><td>Disconnect from node</td></tr>
+                    <tr><td>list</td><td>Process [Node]</td><td>All connected nodes</td></tr>
+                    <tr><td>monitor</td><td>Node -&gt; Process Reference</td><td>Monitor a node</td></tr>
+                    <tr><td>spawn</td><td>Node -&gt; Process () -&gt; Process Pid</td><td>Spawn on remote node</td></tr>
+                </table>
+                <h3>Control.Distributed.RPC</h3>
+                <table class="fn-table">
+                    <tr><td>call</td><td>Node -&gt; Atom -&gt; Atom -&gt; [a] -&gt; Process b</td><td>RPC call to remote node</td></tr>
+                    <tr><td>cast</td><td>Node -&gt; Atom -&gt; Atom -&gt; [a] -&gt; Process ()</td><td>Async RPC cast</td></tr>
+                    <tr><td>multicall</td><td>[Node] -&gt; Atom -&gt; Atom -&gt; [a] -&gt; Process ([b], [Node])</td><td>Multi-node RPC call</td></tr>
+                </table>
+                <h3>Control.Distributed.Global</h3>
+                <table class="fn-table">
+                    <tr><td>register</td><td>Atom -&gt; Pid -&gt; Process ()</td><td>Global name registration</td></tr>
+                    <tr><td>unregister</td><td>Atom -&gt; Process ()</td><td>Remove global name</td></tr>
+                    <tr><td>whereis</td><td>Atom -&gt; Process (Maybe Pid)</td><td>Lookup global name</td></tr>
+                    <tr><td>registeredNames</td><td>Process [Atom]</td><td>All global names</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SYSTEM.IO ─────────────────────────────────────────── -->
+            <section id="system-io">
+                <h2>System.IO</h2>
+                <table class="fn-table">
+                    <tr><td>print</td><td>Show a =&gt; a -&gt; IO ()</td><td>Print value to stdout</td></tr>
+                    <tr><td>println</td><td>Show a =&gt; a -&gt; IO ()</td><td>Print with trailing newline</td></tr>
+                    <tr><td>printf</td><td>String -&gt; [a] -&gt; IO ()</td><td>Formatted output</td></tr>
+                    <tr><td>openFile</td><td>FilePath -&gt; IOMode -&gt; IO IODevice</td><td>Open a file</td></tr>
+                    <tr><td>readFile</td><td>FilePath -&gt; IO Binary</td><td>Read entire file</td></tr>
+                    <tr><td>writeFile</td><td>FilePath -&gt; Binary -&gt; IO ()</td><td>Overwrite file</td></tr>
+                    <tr><td>appendFile</td><td>FilePath -&gt; Binary -&gt; IO ()</td><td>Append to file</td></tr>
+                    <tr><td>withFile</td><td>FilePath -&gt; IOMode -&gt; (IODevice -&gt; IO r) -&gt; IO r</td><td>Bracketed file use</td></tr>
+                    <tr><td>consultFile</td><td>FilePath -&gt; IO [Term]</td><td>Read Erlang terms from file</td></tr>
+                </table>
+                <pre class="code-snippet" style="max-width:100%;margin:0.5rem 0 0">data IOMode = ReadMode | WriteMode | AppendMode | ReadWriteMode</pre>
+            </section>
+
+            <!-- ─── SYSTEM.ERROR ──────────────────────────────────────── -->
+            <section id="system-error">
+                <h2>System.Error</h2>
+                <table class="fn-table">
+                    <tr><td>throw</td><td>a -&gt; b</td><td>Throw an exception</td></tr>
+                    <tr><td>try</td><td>IO a -&gt; IO (Either SomeException a)</td><td>Catch all exceptions</td></tr>
+                    <tr><td>catch</td><td>IO a -&gt; (e -&gt; IO a) -&gt; IO a</td><td>Catch typed exception</td></tr>
+                    <tr><td>catchException</td><td>IO a -&gt; (SomeException -&gt; IO a) -&gt; IO a</td><td>Catch SomeException</td></tr>
+                    <tr><td>error</td><td>String -&gt; a</td><td>Raise an error (from Data.Function)</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SYSTEM.FILE / DIR ─────────────────────────────────── -->
+            <section id="system-file">
+                <h2>System.File / System.Dir / System.FilePath</h2>
+                <h3>System.File</h3>
+                <table class="fn-table">
+                    <tr><td>open</td><td>FilePath -&gt; IOMode -&gt; IO IODevice</td><td>Open file device</td></tr>
+                    <tr><td>close</td><td>IODevice -&gt; IO ()</td><td>Close file device</td></tr>
+                    <tr><td>read</td><td>IODevice -&gt; Integer -&gt; IO Binary</td><td>Read n bytes</td></tr>
+                    <tr><td>write</td><td>IODevice -&gt; Binary -&gt; IO ()</td><td>Write bytes</td></tr>
+                    <tr><td>position</td><td>IODevice -&gt; Location -&gt; IO Integer</td><td>Seek in file</td></tr>
+                    <tr><td>truncate</td><td>IODevice -&gt; IO ()</td><td>Truncate file</td></tr>
+                    <tr><td>sync</td><td>IODevice -&gt; IO ()</td><td>Flush to disk</td></tr>
+                    <tr><td>delete</td><td>FilePath -&gt; IO ()</td><td>Delete file</td></tr>
+                    <tr><td>rename</td><td>FilePath -&gt; FilePath -&gt; IO ()</td><td>Rename / move file</td></tr>
+                    <tr><td>copy</td><td>FilePath -&gt; FilePath -&gt; IO Integer</td><td>Copy file</td></tr>
+                    <tr><td>fileInfo</td><td>FilePath -&gt; IO FileInfo</td><td>File metadata</td></tr>
+                </table>
+                <h3>System.Dir</h3>
+                <table class="fn-table">
+                    <tr><td>makeDir</td><td>FilePath -&gt; IO ()</td><td>Create directory</td></tr>
+                    <tr><td>makeDir'</td><td>FilePath -&gt; IO ()</td><td>Create directory tree</td></tr>
+                    <tr><td>removeDir</td><td>FilePath -&gt; IO ()</td><td>Remove empty directory</td></tr>
+                    <tr><td>listDir</td><td>FilePath -&gt; IO [FilePath]</td><td>List directory entries</td></tr>
+                    <tr><td>currentDir</td><td>IO FilePath</td><td>Get current working directory</td></tr>
+                    <tr><td>changeDir</td><td>FilePath -&gt; IO ()</td><td>Change working directory</td></tr>
+                </table>
+                <h3>System.FilePath</h3>
+                <table class="fn-table">
+                    <tr><td>join</td><td>[FilePath] -&gt; FilePath</td><td>Join path components</td></tr>
+                    <tr><td>dirname</td><td>FilePath -&gt; FilePath</td><td>Directory component</td></tr>
+                    <tr><td>basename</td><td>FilePath -&gt; FilePath</td><td>File name component</td></tr>
+                    <tr><td>extension</td><td>FilePath -&gt; String</td><td>File extension</td></tr>
+                    <tr><td>isAbsolute</td><td>FilePath -&gt; Boolean</td><td>Absolute path test</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SYSTEM.TIMER ──────────────────────────────────────── -->
+            <section id="system-timer">
+                <h2>System.Timer</h2>
+                <table class="fn-table">
+                    <tr><td>sendAfter</td><td>Integer -&gt; Pid -&gt; a -&gt; IO TimerRef</td><td>Send message after delay</td></tr>
+                    <tr><td>applyAfter</td><td>Integer -&gt; IO () -&gt; IO TimerRef</td><td>Run action after delay</td></tr>
+                    <tr><td>sendInterval</td><td>Integer -&gt; Pid -&gt; a -&gt; IO TimerRef</td><td>Repeat message on interval</td></tr>
+                    <tr><td>applyInterval</td><td>Integer -&gt; IO () -&gt; IO TimerRef</td><td>Run action on interval</td></tr>
+                    <tr><td>cancel</td><td>TimerRef -&gt; IO ()</td><td>Cancel a timer</td></tr>
+                    <tr><td>sleep</td><td>Integer -&gt; IO ()</td><td>Sleep milliseconds</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SYSTEM.RANDOM ─────────────────────────────────────── -->
+            <section id="system-random">
+                <h2>System.Random</h2>
+                <table class="fn-table">
+                    <tr><td>uniform</td><td>IO Double</td><td>Random float in [0,1)</td></tr>
+                    <tr><td>uniformInt</td><td>Integer -&gt; IO Integer</td><td>Random int in [1,N]</td></tr>
+                    <tr><td>seed</td><td>Atom -&gt; IO ()</td><td>Seed the PRNG</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── SYSTEM.VM / OS / ENV ──────────────────────────────── -->
+            <section id="system-vm">
+                <h2>System.VM / System.OS / System.Env</h2>
+                <h3>System.VM</h3>
+                <table class="fn-table">
+                    <tr><td>memoryUsage</td><td>IO Integer</td><td>Total memory used (bytes)</td></tr>
+                    <tr><td>processCount</td><td>IO Integer</td><td>Number of processes</td></tr>
+                    <tr><td>schedulerCount</td><td>IO Integer</td><td>Number of schedulers</td></tr>
+                    <tr><td>systemInfo</td><td>Atom -&gt; IO Term</td><td>Generic system info query</td></tr>
+                </table>
+                <h3>System.OS</h3>
+                <table class="fn-table">
+                    <tr><td>osType</td><td>IO (Atom, Atom)</td><td>OS family and name</td></tr>
+                    <tr><td>version</td><td>IO String</td><td>OS version string</td></tr>
+                    <tr><td>cmd</td><td>String -&gt; IO String</td><td>Run shell command</td></tr>
+                    <tr><td>getPid</td><td>IO Integer</td><td>OS process ID</td></tr>
+                    <tr><td>timestamp</td><td>IO (Integer, Integer, Integer)</td><td>Current time (megasec, sec, microsec)</td></tr>
+                </table>
+                <h3>System.Env</h3>
+                <table class="fn-table">
+                    <tr><td>getEnv</td><td>String -&gt; IO (Maybe String)</td><td>Read environment variable</td></tr>
+                    <tr><td>putEnv</td><td>String -&gt; String -&gt; IO ()</td><td>Set environment variable</td></tr>
+                    <tr><td>unsetEnv</td><td>String -&gt; IO ()</td><td>Unset environment variable</td></tr>
+                    <tr><td>environ</td><td>IO [(String, String)]</td><td>All environment variables</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── NETWORK ───────────────────────────────────────────── -->
+            <section id="network-tcp">
+                <h2>Network.TCP</h2>
+                <p class="module-intro">TCP socket operations backed by Erlang's <code>gen_tcp</code>.</p>
+                <table class="fn-table">
+                    <tr><td>listen</td><td>Integer -&gt; [Option] -&gt; IO Socket</td><td>Open listening socket</td></tr>
+                    <tr><td>accept</td><td>Socket -&gt; IO Socket</td><td>Accept a connection</td></tr>
+                    <tr><td>connect</td><td>String -&gt; Integer -&gt; [Option] -&gt; IO Socket</td><td>Open a connection</td></tr>
+                    <tr><td>send</td><td>Socket -&gt; Binary -&gt; IO ()</td><td>Send data</td></tr>
+                    <tr><td>recv</td><td>Socket -&gt; Integer -&gt; IO Binary</td><td>Receive data</td></tr>
+                    <tr><td>close</td><td>Socket -&gt; IO ()</td><td>Close socket</td></tr>
+                    <tr><td>shutdown</td><td>Socket -&gt; Atom -&gt; IO ()</td><td>Shutdown socket direction</td></tr>
+                    <tr><td>controlling</td><td>Socket -&gt; Pid -&gt; IO ()</td><td>Change controlling process</td></tr>
+                    <tr><td>setOpts</td><td>Socket -&gt; [Option] -&gt; IO ()</td><td>Set socket options</td></tr>
+                    <tr><td>getOpts</td><td>Socket -&gt; [Atom] -&gt; IO [Option]</td><td>Get socket options</td></tr>
+                </table>
+            </section>
+
+            <section id="network-udp">
+                <h2>Network.UDP</h2>
+                <p class="module-intro">UDP socket operations backed by Erlang's <code>gen_udp</code>.</p>
+                <table class="fn-table">
+                    <tr><td>open</td><td>Integer -&gt; [Option] -&gt; IO Socket</td><td>Open UDP socket on port</td></tr>
+                    <tr><td>send</td><td>Socket -&gt; String -&gt; Integer -&gt; Binary -&gt; IO ()</td><td>Send datagram</td></tr>
+                    <tr><td>recv</td><td>Socket -&gt; Integer -&gt; IO (String, Integer, Binary)</td><td>Receive datagram</td></tr>
+                    <tr><td>close</td><td>Socket -&gt; IO ()</td><td>Close socket</td></tr>
+                    <tr><td>controlling</td><td>Socket -&gt; Pid -&gt; IO ()</td><td>Change controlling process</td></tr>
+                </table>
+            </section>
+
+            <section id="network-tls">
+                <h2>Network.TLS / Network.DTLS</h2>
+                <p class="module-intro">TLS/SSL and DTLS socket operations backed by Erlang's <code>ssl</code> application.</p>
+                <table class="fn-table">
+                    <tr><td>listen</td><td>Integer -&gt; [Option] -&gt; IO TlsSocket</td><td>TLS listening socket</td></tr>
+                    <tr><td>accept</td><td>TlsSocket -&gt; IO TlsSocket</td><td>Accept TLS connection</td></tr>
+                    <tr><td>connect</td><td>String -&gt; Integer -&gt; [Option] -&gt; IO TlsSocket</td><td>TLS connect</td></tr>
+                    <tr><td>handshake</td><td>TlsSocket -&gt; IO TlsSocket</td><td>Perform TLS handshake</td></tr>
+                    <tr><td>send</td><td>TlsSocket -&gt; Binary -&gt; IO ()</td><td>Send over TLS</td></tr>
+                    <tr><td>recv</td><td>TlsSocket -&gt; Integer -&gt; IO Binary</td><td>Receive over TLS</td></tr>
+                    <tr><td>close</td><td>TlsSocket -&gt; IO ()</td><td>Close TLS connection</td></tr>
+                    <tr><td>peercert</td><td>TlsSocket -&gt; IO Binary</td><td>Get peer certificate</td></tr>
+                </table>
+            </section>
+
+            <section id="network-inet">
+                <h2>Network.Inet</h2>
+                <p class="module-intro">Low-level inet utilities.</p>
+                <table class="fn-table">
+                    <tr><td>getHostByName</td><td>String -&gt; IO Hostent</td><td>DNS lookup by name</td></tr>
+                    <tr><td>getHostByAddr</td><td>IpAddress -&gt; IO Hostent</td><td>Reverse DNS lookup</td></tr>
+                    <tr><td>gethostname</td><td>IO String</td><td>Local hostname</td></tr>
+                    <tr><td>peername</td><td>Socket -&gt; IO (IpAddress, Integer)</td><td>Remote address/port</td></tr>
+                    <tr><td>sockname</td><td>Socket -&gt; IO (IpAddress, Integer)</td><td>Local address/port</td></tr>
+                    <tr><td>ntoa</td><td>IpAddress -&gt; String</td><td>IP address to string</td></tr>
+                    <tr><td>parse_address</td><td>String -&gt; Either String IpAddress</td><td>Parse IP address string</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── DATABASE ───────────────────────────────────────────── -->
+            <section id="database-ets">
+                <h2>Database.ETS</h2>
+                <p class="module-intro">Erlang Term Storage — in-memory hash/ordered-set tables.</p>
+                <table class="fn-table">
+                    <tr><td>new</td><td>Atom -&gt; [Option] -&gt; IO Tid</td><td>Create a table</td></tr>
+                    <tr><td>insert</td><td>Tid -&gt; a -&gt; IO ()</td><td>Insert or replace object</td></tr>
+                    <tr><td>insertNew</td><td>Tid -&gt; a -&gt; IO Boolean</td><td>Insert only if key absent</td></tr>
+                    <tr><td>lookup</td><td>Tid -&gt; k -&gt; IO [a]</td><td>Lookup by key</td></tr>
+                    <tr><td>member</td><td>Tid -&gt; k -&gt; IO Boolean</td><td>Key membership test</td></tr>
+                    <tr><td>delete</td><td>Tid -&gt; k -&gt; IO ()</td><td>Delete by key</td></tr>
+                    <tr><td>deleteAllObjects</td><td>Tid -&gt; IO ()</td><td>Delete all entries</td></tr>
+                    <tr><td>tab2list</td><td>Tid -&gt; IO [a]</td><td>All table entries</td></tr>
+                    <tr><td>select</td><td>Tid -&gt; MatchSpec -&gt; IO [a]</td><td>Match select</td></tr>
+                    <tr><td>updateCounter</td><td>Tid -&gt; k -&gt; Integer -&gt; IO Integer</td><td>Atomic counter update</td></tr>
+                    <tr><td>info</td><td>Tid -&gt; Atom -&gt; IO Term</td><td>Table info query</td></tr>
+                </table>
+            </section>
+
+            <section id="database-dets">
+                <h2>Database.DETS</h2>
+                <p class="module-intro">Disk-based Erlang Term Storage.</p>
+                <table class="fn-table">
+                    <tr><td>open</td><td>Atom -&gt; [Option] -&gt; IO ()</td><td>Open / create table file</td></tr>
+                    <tr><td>close</td><td>Atom -&gt; IO ()</td><td>Flush and close table</td></tr>
+                    <tr><td>insert</td><td>Atom -&gt; a -&gt; IO ()</td><td>Insert object</td></tr>
+                    <tr><td>lookup</td><td>Atom -&gt; k -&gt; IO [a]</td><td>Lookup by key</td></tr>
+                    <tr><td>delete</td><td>Atom -&gt; k -&gt; IO ()</td><td>Delete by key</td></tr>
+                    <tr><td>member</td><td>Atom -&gt; k -&gt; IO Boolean</td><td>Key membership test</td></tr>
+                    <tr><td>select</td><td>Atom -&gt; MatchSpec -&gt; IO [a]</td><td>Match select</td></tr>
+                    <tr><td>sync</td><td>Atom -&gt; IO ()</td><td>Flush to disk</td></tr>
+                    <tr><td>deleteAllObjects</td><td>Atom -&gt; IO ()</td><td>Delete all entries</td></tr>
+                </table>
+            </section>
+
+            <section id="database-mnesia">
+                <h2>Database.Mnesia</h2>
+                <p class="module-intro">Distributed real-time database system. Provides ACID transactions and replication across nodes.</p>
+                <table class="fn-table">
+                    <tr><td>createTable</td><td>Atom -&gt; [Option] -&gt; IO ()</td><td>Create a Mnesia table</td></tr>
+                    <tr><td>deleteTable</td><td>Atom -&gt; IO ()</td><td>Delete a table</td></tr>
+                    <tr><td>transaction</td><td>IO a -&gt; IO (Either Atom a)</td><td>Run in a transaction</td></tr>
+                    <tr><td>read</td><td>Atom -&gt; k -&gt; IO [a]</td><td>Read records by key</td></tr>
+                    <tr><td>write</td><td>a -&gt; IO ()</td><td>Write a record (in transaction)</td></tr>
+                    <tr><td>delete</td><td>Atom -&gt; k -&gt; IO ()</td><td>Delete record by key</td></tr>
+                    <tr><td>dirty_read</td><td>Atom -&gt; k -&gt; IO [a]</td><td>Read without transaction</td></tr>
+                    <tr><td>dirty_write</td><td>a -&gt; IO ()</td><td>Write without transaction</td></tr>
+                    <tr><td>select</td><td>Atom -&gt; MatchSpec -&gt; IO [a]</td><td>Query table</td></tr>
+                    <tr><td>addTableCopy</td><td>Atom -&gt; Node -&gt; Atom -&gt; IO ()</td><td>Replicate table to node</td></tr>
+                    <tr><td>tableInfo</td><td>Atom -&gt; Atom -&gt; IO Term</td><td>Table metadata</td></tr>
+                    <tr><td>start</td><td>IO ()</td><td>Start Mnesia application</td></tr>
+                    <tr><td>stop</td><td>IO ()</td><td>Stop Mnesia application</td></tr>
+                </table>
+            </section>
+
+            <!-- ─── TEXT ───────────────────────────────────────────────── -->
+            <section id="text-json">
+                <h2>Text.Json</h2>
+                <p class="module-intro">JSON encoding and decoding.</p>
+                <table class="fn-table">
+                    <tr><td>encode</td><td>a -&gt; Binary</td><td>Encode value to JSON bytes</td></tr>
+                    <tr><td>decode</td><td>Binary -&gt; Either String Term</td><td>Decode JSON bytes to term</td></tr>
+                    <tr><td>encodeToStr</td><td>a -&gt; String</td><td>Encode value to JSON string</td></tr>
+                    <tr><td>decodeStr</td><td>String -&gt; Either String Term</td><td>Decode JSON string</td></tr>
+                </table>
+            </section>
+
+            <section id="text-parsec">
+                <h2>Text.Parsec</h2>
+                <p class="module-intro">Parser combinator library for building text parsers.</p>
+                <table class="fn-table">
+                    <tr><td>char</td><td>Char -&gt; Parser Char</td><td>Match a specific character</td></tr>
+                    <tr><td>string</td><td>String -&gt; Parser String</td><td>Match a literal string</td></tr>
+                    <tr><td>digit</td><td>Parser Char</td><td>Match a decimal digit</td></tr>
+                    <tr><td>letter</td><td>Parser Char</td><td>Match a letter</td></tr>
+                    <tr><td>space / spaces</td><td>Parser Char / Parser ()</td><td>Match whitespace</td></tr>
+                    <tr><td>many</td><td>Parser a -&gt; Parser [a]</td><td>Zero or more</td></tr>
+                    <tr><td>many1</td><td>Parser a -&gt; Parser [a]</td><td>One or more</td></tr>
+                    <tr><td>try</td><td>Parser a -&gt; Parser a</td><td>Backtracking try</td></tr>
+                    <tr><td>(&lt;|&gt;)</td><td>Parser a -&gt; Parser a -&gt; Parser a</td><td>Ordered choice</td></tr>
+                    <tr><td>between</td><td>Parser o -&gt; Parser c -&gt; Parser a -&gt; Parser a</td><td>Match between delimiters</td></tr>
+                    <tr><td>sepBy</td><td>Parser a -&gt; Parser sep -&gt; Parser [a]</td><td>Separated list</td></tr>
+                    <tr><td>parse</td><td>Parser a -&gt; String -&gt; String -&gt; Either ParseError a</td><td>Run a parser</td></tr>
+                </table>
+            </section>
+
+        </main>
+    </div>
+
+    <footer>
+        <div class="footer-columns">
+            <div>
+                <h4>Phi</h4>
+                <p>Haskell-like functional language compiled to Erlang BEAM, written in Rust</p>
+            </div>
+            <div>
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="index.html">Language Guide</a></li>
+                    <li><a href="https://github.com/iho/phi">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            var stylesheet = document.getElementById('theme-stylesheet');
+            var toggle = document.getElementById('theme-toggle');
+            var mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+            function themeHref(theme) {
+                return theme === 'dark' ? 'index-black.css?v=6' : 'index-light.css?v=6';
+            }
+
+            function resolvedTheme() {
+                var storedTheme = localStorage.getItem('phi-docs-theme');
+                if (storedTheme === 'light' || storedTheme === 'dark') {
+                    return storedTheme;
+                }
+                return mediaQuery && mediaQuery.matches ? 'dark' : 'light';
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                stylesheet.setAttribute('href', themeHref(theme));
+                toggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+                toggle.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' theme');
+            }
+
+            applyTheme(resolvedTheme());
+
+            toggle.addEventListener('click', function () {
+                var nextTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('phi-docs-theme', nextTheme);
+                applyTheme(nextTheme);
+            });
+
+            if (mediaQuery) {
+                mediaQuery.addEventListener('change', function () {
+                    if (!localStorage.getItem('phi-docs-theme')) {
+                        applyTheme(resolvedTheme());
+                    }
+                });
+            }
+        }());
+    </script>
+</body>
+</html>
