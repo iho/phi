@@ -78,21 +78,141 @@ $ cargo build --release
 # Compile stdlib + test modules to ebin/
 $ cargo run -- src/stdlib src/tests
 --- Batch Parsing ---
-Summary: 194/194 files parsed successfully.
+Summary: 198/198 files parsed successfully.
 
 --- Typechecking ---
-Typechecking done: 194/194 ok
+Typechecking done: 198/198 ok
 
 --- Codegen (.phi → .beam directly) ---
-  Direct .beam: 194 | failed: 0
+  Direct .beam: 198 | failed: 0
 
-# Run compiled modules in Erlang
+# Start the Erlang REPL
 $ erl -pa ebin
-> F = 'Phi.HelloWorld':main(), F().
+
+1&gt; F = 'Phi.HelloWorld':main(), F().
 Hello World from Phi!
+ok
+
+2&gt; F = 'Phi.PingPong':main(), F().
+Ping!
+Pong!
+ok
+
+3&gt; F = 'Phi.Demo.Counter':main(), F().
+Call: Query
+22
+ok
 </pre>
             </div>
         </section>
+        <section>
+            <h2>Message Passing Concurrency</h2>
+            <div style="max-width:720px;margin:0 auto;">
+                <p>Phi uses Erlang's actor model. Processes communicate via <code>!</code> (send) and <code>receive</code>.</p>
+                <pre class="code-snippet">module PingPong (main) where
+
+import Prelude (IO, Process, Unit, bind, discard, getSelf, pure, spawn, (!))
+import System.IO (println)
+
+main :: IO ()
+main = do
+  self &lt;- getSelf
+  pid &lt;- spawn loop
+  pid ! (self, :ping)
+  _ &lt;- receive :pong -&gt; println "Pong!"
+  pid ! :stop
+ where
+  loop :: Process ()
+  loop =
+    receive
+      (from, :ping) -&gt; do
+        println "Ping!"
+        from ! :pong
+        loop
+      :stop -&gt; pure ()</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>OTP GenServer</h2>
+            <div style="max-width:720px;margin:0 auto;">
+                <p>OTP behaviours are expressed as type classes. <code>data Request = Inc | Dec | Query</code> defines the message protocol. <code>Demo.Counter</code> starts the server, sends casts, and queries the state.</p>
+                <pre class="code-snippet">-- Demo/Server.phi
+module Demo.Server (start, inc, dec, query) where
+
+import Prelude (Integer, Atom, pure, ($))
+import Control.Behaviour.GenServer
+  ( class GenServer
+  , HandleCall, HandleCast, Init
+  , startLinkWith, initOk
+  , call, cast, noReply, reply, shutdown
+  )
+import Control.Process (Process)
+import Data.Pid (Pid)
+import System.IO (println)
+
+data Request = Inc | Dec | Query
+data Reply = QueryResult Integer
+data State = State Integer
+
+name :: Atom
+name = :server
+
+start :: Process Pid
+start = startServer  -- wired via FFI companion module
+
+inc :: Process ()
+inc = cast name Inc
+
+dec :: Process ()
+dec = cast name Dec
+
+query :: Process Integer
+query = do
+  QueryResult i &lt;- call name Query
+  pure i
+
+instance GenServer Request Reply State where
+  handleCall = handleCall
+  handleCast = handleCast
+
+init :: Integer -&gt; Init Request State
+init n = initOk (State n)
+
+handleCall :: HandleCall Request Reply State
+handleCall Query _from (State i) = do
+  println "Call: Query"
+  reply (QueryResult i) (State i)
+handleCall _req _from st = shutdown :badRequest st
+
+handleCast :: HandleCast Request Reply State
+handleCast Inc (State n) = noReply $ State (n + 1)
+handleCast Dec (State n) = noReply $ State (n - 1)
+handleCast _ st = noReply st</pre>
+                <pre class="code-snippet">-- Demo/Counter.phi
+module Demo.Counter (main) where
+
+import Prelude (IO, bind, discard, pure)
+import System.IO (println)
+import Data.Show (show)
+import Demo.Server (start, inc, dec, query)
+
+main :: IO ()
+main = do
+  start
+  inc
+  inc
+  inc
+  dec
+  n &lt;- query
+  println (show n)</pre>
+                <pre class="code-snippet">$ cargo run -- src/stdlib src/tests
+$ erl -pa ebin -noshell -eval "F = 'Phi.Demo.Counter':main(), F(), halt()"
+Call: Query
+22</pre>
+            </div>
+        </section>
+
         <section>
             <h2>Properties</h2>
             <div style="max-width:720px;margin:0 auto;">

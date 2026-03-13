@@ -104,12 +104,24 @@ Typechecking done: 194/194 ok
   Direct .beam: 194 | failed: 0
 ```
 
-Run the compiled modules in Erlang:
+Run the compiled modules in the Erlang REPL:
 
-```bash
-erl -pa ebin
-> F = 'Phi.HelloWorld':main(), F().
+```erlang
+$ erl -pa ebin
+
+1> F = 'Phi.HelloWorld':main(), F().
 Hello World from Phi!
+ok
+
+2> F = 'Phi.PingPong':main(), F().
+Ping!
+Pong!
+ok
+
+3> F = 'Phi.Demo.Counter':main(), F().
+Call: Query
+22
+ok
 ```
 
 Note: IO actions are lazy — `main/0` returns a `fun`; calling it executes the effect.
@@ -198,6 +210,136 @@ foreign import length "erlang" "length" :: forall a. [a] -> Integer
 ```
 
 Backed by a companion `Phi.Module.FFI.erl` file for non-trivial FFI.
+
+### Message Passing Concurrency — Ping/Pong
+
+Phi uses Erlang's actor model. Processes communicate via `!` (send) and `receive`.
+
+```haskell
+module PingPong (main) where
+
+import Prelude (IO, Process, Unit, bind, discard, getSelf, pure, spawn, (!))
+import System.IO (println)
+
+main :: IO ()
+main = do
+  self <- getSelf
+  pid <- spawn loop
+  pid ! (self, :ping)
+  _ <- receive :pong -> println "Pong!"
+  pid ! :stop
+ where
+  loop :: Process ()
+  loop =
+    receive
+      (from, :ping) -> do
+        println "Ping!"
+        from ! :pong
+        loop
+      :stop -> pure ()
+```
+
+Source lives in `src/stdlib/PingPong.phi` and compiles to `ebin/Phi.PingPong.beam`.
+
+### OTP GenServer — Counter
+
+OTP behaviours are expressed via type classes. `Demo.Server` defines the GenServer with `handleCall`/`handleCast` callbacks. `Demo.Counter` is the entry point that drives it.
+
+```haskell
+-- src/stdlib/Demo/Server.phi
+module Demo.Server
+  ( start
+  , inc
+  , dec
+  , query
+  ) where
+
+import Prelude (Integer, Atom, pure, ($))
+import Control.Behaviour.GenServer
+  ( class GenServer
+  , HandleCall, HandleCast, Init
+  , startLinkWith, initOk
+  , call, cast, noReply, reply, shutdown
+  )
+import Control.Process (Process)
+import Data.Pid (Pid)
+import System.IO (println)
+
+data Request = Inc | Dec | Query
+data Reply = QueryResult Integer
+data State = State Integer
+
+name :: Atom
+name = :server
+
+start :: Process Pid
+start = startServer
+
+inc :: Process ()
+inc = cast name Inc
+
+dec :: Process ()
+dec = cast name Dec
+
+query :: Process Integer
+query = do
+  QueryResult i <- call name Query
+  pure i
+
+instance GenServer Request Reply State where
+  handleCall = handleCall
+  handleCast = handleCast
+
+init :: Integer -> Init Request State
+init n = initOk (State n)
+
+handleCall :: HandleCall Request Reply State
+handleCall Query _from (State i) = do
+  println "Call: Query"
+  reply (QueryResult i) (State i)
+handleCall _req _from st = shutdown :badRequest st
+
+handleCast :: HandleCast Request Reply State
+handleCast Inc (State n) = noReply $ State (n + 1)
+handleCast Dec (State n) = noReply $ State (n - 1)
+handleCast _ st = noReply st
+```
+
+```haskell
+-- src/stdlib/Demo/Counter.phi
+module Demo.Counter (main) where
+
+import Prelude (IO, bind, discard, pure)
+import System.IO (println)
+import Data.Show (show)
+import Demo.Server (start, inc, dec, query)
+
+main :: IO ()
+main = do
+  start
+  inc
+  inc
+  inc
+  dec
+  n <- query
+  println (show n)
+```
+
+Run it:
+
+```bash
+cargo run -- src/stdlib src/tests
+erl -pa ebin -noshell -eval "F = 'Phi.Demo.Counter':main(), F(), halt()"
+```
+
+Expected output:
+
+```
+Call: Query
+22
+```
+
+Source lives in `src/stdlib/Demo/` and compiles to `ebin/Phi.Demo.Server.beam` and `ebin/Phi.Demo.Counter.beam`.
 
 ## BEAM Codegen Notes
 

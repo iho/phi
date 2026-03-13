@@ -1,0 +1,6 @@
+module HelloWorld (main) where
+
+import System.IO (println)
+
+main :: IO ()
+main = println "Hello World from Phi!"

@@ -1,0 +1,17 @@
+module Demo.Counter (main) where
+
+import Prelude (IO, bind, discard, pure)
+import Control.Process (Process)
+import System.IO (println)
+import Data.Show (show)
+import Demo.Server (start, inc, dec, query)
+
+main :: IO ()
+main = do
+  start
+  inc
+  inc
+  inc
+  dec
+  n <- query
+  println (show n)

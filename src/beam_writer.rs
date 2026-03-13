@@ -151,7 +151,7 @@ fn desugar_receive(branches: &[ast::CaseBranch], after: &Option<Box<ast::AfterCl
         .map(|b| ast::CaseBranch {
             binders: b.binders.clone(),
             guards: b.guards.clone(),
-            body: ast::Expr::Tuple(vec![ast::Expr::Atom("ok".to_string()), b.body.clone()]),
+            body: b.body.clone(),
         })
         .collect();
 
@@ -173,7 +173,7 @@ fn desugar_receive(branches: &[ast::CaseBranch], after: &Option<Box<ast::AfterCl
         )
     } else {
         (
-            ast::Expr::Number(-1),
+            ast::Expr::Atom("infinity".to_string()),
             ast::Expr::Lam(vec![], Box::new(ast::Expr::Unit)),
         )
     };
@@ -2203,9 +2203,11 @@ fn emit_expr(
                 beam.emit_call_ext(2, imp_idx);
             } else if op == "<$>" {
                 // IO functor fmap: call Phi.Control.Monad.FFI.fmapImpl/2 with (f=left, ma=right).
-                // X(0) = f, X(1) = ma (already moved above).
+                // Preload clobbers X(0)/X(1), so re-move from Y regs after preload.
                 emit_preload_module(beam, "Phi.Control.Monad.FFI");
                 let fmap_idx = beam.intern_import("Phi.Control.Monad.FFI", "fmapImpl", 2);
+                beam.emit_move(y_left, Reg::X(0));
+                beam.emit_move(y_right, Reg::X(1));
                 beam.emit_call_ext(2, fmap_idx);
             } else if op == "<>" {
                 // Binary/String append: build [left, right] and call iolist_to_binary/1.
@@ -2247,8 +2249,11 @@ fn emit_expr(
                         ctx.next_x = 3;
                         beam.emit_call_fun(2);
                     } else {
+                        // Preload clobbers X(0)/X(1); re-move args from Y regs after preload.
                         emit_preload_module(beam, &erl_mod);
                         let imp_idx = beam.intern_import(&erl_mod, fun_part, 2);
+                        beam.emit_move(y_left, Reg::X(0));
+                        beam.emit_move(y_right, Reg::X(1));
                         beam.emit_call_ext(2, imp_idx);
                     }
                 } else {
