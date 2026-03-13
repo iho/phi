@@ -108,9 +108,11 @@ Run the compiled modules in Erlang:
 
 ```bash
 erl -pa ebin
-> 'Phi.HelloWorld':main().
+> F = 'Phi.HelloWorld':main(), F().
 Hello World from Phi!
 ```
+
+Note: IO actions are lazy — `main/0` returns a `fun`; calling it executes the effect.
 
 Run the generated test BEAMs:
 

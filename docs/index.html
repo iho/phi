@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Φ — Native PureScript for Erlang VM</title>
+    <title>Phi — Haskell-like functional language for the Erlang VM</title>
     <script>
         (function () {
             var storedTheme = localStorage.getItem('phi-docs-theme');
@@ -38,20 +38,13 @@
     <header>
         <div class="hero-content">
             <h1>Phi</h1>
-            <p class="hero-subtitle">Algebraic pure functional language <b>Phi</b>,
-            implementing <b>PureScript</b> and <b>Hamler</b> syntax and sematics,
-            rewritten in <b>Elixir</b> for <b>Erlang/OTP</b> concurrency model.
-             <!--Алгебраїчна чиста функціональна мова програмування Phi, яка реалізує синтаксис і семантику PureScript,
-                                    написана на Elixir для телекомунікаційної платформи <b>Erlang</b>.--></p>
-            <div style="margin-left:-23px;" class="code-snippet">module Main where
+            <p class="hero-subtitle">A statically typed, purely functional language with <b>Haskell</b>-style syntax — type classes, do-notation, pattern matching — that compiles directly to <b>Erlang BEAM</b> bytecode. Written in <b>Rust</b>.</p>
+            <div style="margin-left:-23px;" class="code-snippet">module HelloWorld (main) where
 
-import Prelude
-import Effect.Console (log)
+import System.IO (println)
 
-main :: Effect Unit
-main = do
-    log "Hello, Phi!"
-    log "Strongly-typed • Concurrent • Distributed"</div>
+main :: IO ()
+main = println "Hello World from Phi!"</div>
         </div>
         </div>
     </header>
@@ -69,57 +62,53 @@ main = do
                     <p>Compile-time type checking and inference. Algebraic data types, pattern matching, type classes.</p>
                 </div>
                 <div class="product-card">
-                    <h3>Effectful Concurrency</h3>
-                    <p>Actors, OTP behaviours, supervision trees — all with PureScript syntax.</p>
+                    <h3>Erlang Concurrency</h3>
+                    <p>Native receive/after syntax, message passing, and actors — all targeting the battle-tested BEAM runtime.</p>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>Announcement</h2>
+            <h2>Getting Started</h2>
             <div style="max-width:720px;margin:0 auto;">
                 <pre class="code-snippet">
-$ mix deps.get
-$ mix phi.repl
-Phi Interactive REPL
-Type :quit to exit, :reset to clear bindings
-Library loaded. Ready.
-ф> import Control.Process
-ф> getSelf
-#PID&lt;0.94.0&gt;
-ф> import Control.Application
-ф> loadedApplications
-[
-  %{name: :logger, vsn: ~c"1.18.4", desc: ~c"logger"},
-  %{name: :mix, vsn: ~c"1.18.4", desc: ~c"mix"},
-  %{name: :iex, vsn: ~c"1.18.4", desc: ~c"iex"},
-  %{name: :phi, vsn: ~c"0.3.1", desc: ~c"The Phi Programming Language",
-  %{name: :ex_unit, vsn: ~c"1.18.4"', desc: ~c"ex_unit"},
-  %{name: :stdlib, vsn: ~c"7.0.2", desc: ~C"ERTS CXC 138 10"},
-  %{name: :crypto, vsn: ~c"5.6"', desc: ~c "CRYPTO" },
-  %{name: :compiler, vsn: ~c"9.0.1", desc: ~C"ERTS CXC 138 10"},
-  %{name: :elixir, vsn: ~c"1.18.4", desc: ~c"elixir"},
-  %{name: :kernel, vsn: ~C"10.3.2"', desc: ~C"ERTS CXC 138 10"}
-]
+# Requirements: Rust 1.85+, Erlang/OTP 25+
+$ cargo build --release
+
+# Compile stdlib + test modules to ebin/
+$ cargo run -- src/stdlib src/tests
+--- Batch Parsing ---
+Summary: 194/194 files parsed successfully.
+
+--- Typechecking ---
+Typechecking done: 194/194 ok
+
+--- Codegen (.phi → .beam directly) ---
+  Direct .beam: 194 | failed: 0
+
+# Run compiled modules in Erlang
+$ erl -pa ebin
+> F = 'Phi.HelloWorld':main(), F().
+Hello World from Phi!
 </pre>
             </div>
         </section>
         <section>
             <h2>Properties</h2>
             <div style="max-width:720px;margin:0 auto;">
-• Functional programming<br>
-• Functions, higher-order functions<br>
-• Algebraic data type (ADT)<br>
-• PureScript syntax and Hamler base library<br>
-• Compilation of base library in seconds<br>
-• Compile-time type checkig and inference<br>
-• Currying and partial application<br>
-• Pattern matching, and effective guards<br>
-• List comprehension<br>
-• Featured Absence of HKT<br>
-• Applicative and Monad<br>
-• Advanced module system<br>
-• Built-in concurrency<br>
+• Hindley-Milner type inference with type class constraints<br>
+• Algebraic data types (ADT)<br>
+• Type classes — class/instance/where, dictionary passing<br>
+• Pattern matching — constructors, literals, tuples, list patterns, guards<br>
+• Do-notation and monadic &gt;&gt;= / &gt;&gt; / pure<br>
+• List comprehensions — [f x | x &lt;- xs, pred x]<br>
+• receive/after syntax for Erlang message passing<br>
+• Where-clauses and local let bindings<br>
+• Lambda lifting with free-variable capture (make_fun3)<br>
+• Foreign Function Interface (foreign import)<br>
+• 194 stdlib modules — Data.List, Data.Map, Control.Monad, System.IO, and more<br>
+• Compiles directly to BEAM bytecode — no erlc involved<br>
+• Parallel compilation via rayon<br>
             </div>
         </section>
 
@@ -153,7 +142,7 @@ This language was created by non-human impersonated spirits of these guys repres
         <div class="footer-columns">
             <div>
                 <h4>Phi</h4>
-                <p>PureScript written in Elixir for Erlang/OTP</p>
+                <p>Haskell-like functional language compiled to Erlang BEAM, written in Rust</p>
             </div>
             <div>
                 <h4>Resources</h4>
