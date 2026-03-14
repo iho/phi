@@ -87,32 +87,27 @@ class GenServer req rep st | req -> rep, rep -> st, st -> req where
   handleCast :: HandleCast req rep st
 
 -- | Start a standalone server process.
+-- The third argument is the GenServer class dictionary (handleCall, handleCast).
 foreign import start
-  :: forall req rep st. GenServer req rep st
-  => (Init req st) -> Process Pid
+  :: forall req rep st a. (Init req st) -> a -> Process Pid
 
 -- | Start a standalone server process with registered name.
 foreign import startWith
-  :: forall req rep st. GenServer req rep st
-  => Name -> (Init req st) -> Process Pid
+  :: forall req rep st a. Name -> (Init req st) -> a -> Process Pid
 
 -- | Start a server process as part of a supervision tree.
 foreign import startLink
-  :: forall req rep st. GenServer req rep st
-  => (Init req st) -> Process Pid
+  :: forall req rep st a. (Init req st) -> a -> Process Pid
 
 foreign import startLinkWith
-  :: forall req rep st. GenServer req rep st
-  => Name -> (Init req st) -> Process Pid
+  :: forall req rep st a. Name -> (Init req st) -> a -> Process Pid
 
 -- | Start and monitor a server process
 foreign import startMonitor
-  :: forall req rep st. GenServer req rep st
-  => (Init req st) -> Process (Pid, Reference)
+  :: forall req rep st a. (Init req st) -> a -> Process (Pid, Reference)
 
 foreign import startMonitorWith
-  :: forall req rep st. GenServer req rep st
-  => Name -> (Init req st) -> Process (Pid, Reference)
+  :: forall req rep st a. Name -> (Init req st) -> a -> Process (Pid, Reference)
 
 -- | Stop the server process.
 foreign import stop :: Name -> Process ()

@@ -429,11 +429,28 @@ fn decl_parser(
             });
 
         let field = var_id.then_ignore(just(Token::DoubleColon)).or_not().then(type_.clone()).map(|(name, ty)| Field { name, ty });
-        
+
+        // Atomic type for positional constructor fields: a single constructor name, type variable,
+        // list, tuple, or record type — without consuming adjacent types as type applications.
+        // E.g. `Shutdown ExitReason st` → two fields: ExitReason and st (not App(ExitReason, st)).
+        let atomic_type = choice((
+            qual_proper.clone().map(Type::Constructor),
+            var_id.clone().map(Type::Var),
+            just(Token::Unit).to(Type::Unit),
+            type_.clone()
+                .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+                .map(|t| Type::List(Box::new(t))),
+            type_.clone()
+                .separated_by(just(Token::Comma))
+                .delimited_by(just(Token::LeftParen), just(Token::RightParen))
+                .map(|ts: Vec<Type>| if ts.len() == 1 { ts[0].clone() } else { Type::Tuple(ts) }),
+        ));
+        let positional_field = atomic_type.map(|ty| Field { name: None, ty });
+
         let constructor = qual_proper.clone()
             .then(choice((
                 field.clone().separated_by(just(Token::Comma)).delimited_by(just(Token::LeftBrace), just(Token::RightBrace)),
-                field.clone().repeated(),
+                positional_field.repeated(),
             )))
             .map(|(name, fields)| Constructor { name, fields });
 

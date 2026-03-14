@@ -309,6 +309,13 @@ struct CodeGenCtx<'a> {
     /// Names explicitly imported via `import Mod (name)` in this module's source.
     /// Only these should shadow local function definitions during emit_call dispatch.
     explicit_imports: &'a std::collections::HashSet<String>,
+    /// The BEAM module name (e.g. "Phi.Demo.Server") for the module being compiled.
+    module_name: &'a str,
+    /// The name of the function currently being compiled (for self-reference detection).
+    current_fn_name: String,
+    /// Constructor name → field count, from data declarations across all modules.
+    /// Used as fallback when env.lookup() fails to find a constructor.
+    con_arities: &'a std::collections::HashMap<String, u32>,
 }
 
 impl<'a> CodeGenCtx<'a> {
@@ -841,6 +848,34 @@ impl BeamModule {
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
+/// Build a map of constructor name → field count for all data declarations across all modules.
+/// Used as a fallback when env.lookup() doesn't have the constructor in scope.
+pub fn compute_constructor_arities(modules: &[ast::Module]) -> std::collections::HashMap<String, u32> {
+    let mut map = std::collections::HashMap::new();
+    fn collect(decls: &[ast::Decl], map: &mut std::collections::HashMap<String, u32>) {
+        for decl in decls {
+            match decl {
+                ast::Decl::Data(_, _, constructors) => {
+                    for ctor in constructors {
+                        if ctor.name == "Shutdown" {
+                            eprintln!("[DEBUG Shutdown] fields={}, types={:?}", ctor.fields.len(), ctor.fields.iter().map(|f| format!("{:?}", f.ty)).collect::<Vec<_>>());
+                        }
+                        map.insert(ctor.name.clone(), ctor.fields.len() as u32);
+                    }
+                }
+                ast::Decl::Newtype(_, _, ctor) => {
+                    map.insert(ctor.name.clone(), ctor.fields.len() as u32);
+                }
+                _ => {}
+            }
+        }
+    }
+    for module in modules {
+        collect(&module.declarations, &mut map);
+    }
+    map
+}
+
 /// Build a map of fully-qualified function name → actual BEAM arity for all Phi modules.
 /// Used to correctly handle cross-module calls where PatBind functions are arity 0 in BEAM
 /// regardless of their type arity.
@@ -917,6 +952,7 @@ pub fn generate_beam(
     module: &ast::Module,
     env: &crate::env::Env,
     beam_arities: &std::collections::HashMap<String, u32>,
+    con_arities: &std::collections::HashMap<String, u32>,
 ) -> Result<Vec<u8>, BeamGenError> {
     // Build a per-module env: clone global env but override module_aliases with only
     // this module's own Import declarations. The global env merges aliases from ALL
@@ -964,6 +1000,32 @@ pub fn generate_beam(
                             }
                         };
                         local_env.term_aliases.insert(name.clone(), fq);
+                    }
+                }
+            }
+            crate::ast::Decl::Import(m, None, None, false) => {
+                // Wildcard import (`import Mod`): override any conflicting unqualified constructor
+                // bindings with the ones from this specific module. This ensures that when multiple
+                // modules define constructors with the same name (e.g. `Shutdown`), the version
+                // from the explicitly imported module takes precedence over the global env's last
+                // writer.
+                // The typechecker stores FQN keys WITHOUT the "Phi." prefix (module.name only).
+                // We need to check both "Phi.Mod.Ctor" and "Mod.Ctor" style keys.
+                let prefix_no_phi = format!("{}.", m);
+                let fqn_bindings: Vec<(String, (String, crate::type_sys::PolyType))> = env.bindings
+                    .iter()
+                    .filter(|(k, _)| k.starts_with(&prefix_no_phi) && !k[prefix_no_phi.len()..].contains('.'))
+                    .map(|(k, v)| {
+                        let short_name = k[prefix_no_phi.len()..].to_string();
+                        (short_name, v.clone())
+                    })
+                    .collect();
+                for (short_name, val) in fqn_bindings {
+                    // Only override constructors (uppercase names).
+                    if short_name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        local_env.bindings.insert(short_name.clone(), val);
+                        // Also update term_aliases so resolve_term_alias() returns the correct FQN.
+                        local_env.term_aliases.insert(short_name.clone(), format!("{}.{}", m, short_name));
                     }
                 }
             }
@@ -1065,6 +1127,9 @@ pub fn generate_beam(
                 arg_offset: item.num_free,
                 beam_arities,
                 explicit_imports: &explicit_imports,
+                module_name: &erl_mod_name,
+                current_fn_name: item.name.clone(),
+                con_arities,
             };
 
             // emit allocate BEFORE any pattern check: tuple binders emit
@@ -1148,6 +1213,9 @@ pub fn generate_beam(
                             arg_offset: 0,
                             beam_arities,
                             explicit_imports: &explicit_imports,
+                            module_name: &erl_mod_name,
+                            current_fn_name: item.name.clone(),
+                            con_arities,
                         };
 
                         for (i, binder) in binders.iter().enumerate() {
@@ -1203,6 +1271,9 @@ pub fn generate_beam(
                             arg_offset: 0,
                             beam_arities,
                             explicit_imports: &explicit_imports,
+                            module_name: &erl_mod_name,
+                            current_fn_name: item.name.clone(),
+                            con_arities,
                         };
 
                         if let ast::Binder::Var(_name) = binder {
@@ -1224,6 +1295,9 @@ pub fn generate_beam(
                             arg_offset: 0,
                             beam_arities,
                             explicit_imports: &explicit_imports,
+                            module_name: &erl_mod_name,
+                            current_fn_name: item.name.clone(),
+                            con_arities,
                         };
 
                         for (i, binder) in binders.iter().enumerate() {
@@ -1912,9 +1986,10 @@ fn emit_expr(
             }
             
             // Check if this name refers to a local function used as a value.
-            // Find any matching entry (any arity) in local_fns.
+            // Find the highest-arity entry in local_fns to get the full function, not a curried wrapper.
             let local_fun = ctx.local_fns.iter()
-                .find(|((n, _), _)| n == name)
+                .filter(|((n, _), _)| n == name)
+                .max_by_key(|((_, arity), _)| *arity)
                 .map(|((_, arity), &label)| (*arity, label));
             if let Some((arity, label)) = local_fun {
                 if arity == 0 {
@@ -1939,6 +2014,7 @@ fn emit_expr(
                 // Arity-0 constructors (Nothing, True, ...) stay as atoms.
                 let con_arity = ctx.env.lookup(name.as_str())
                     .map(|(_, sch)| mono_arity(&sch.ty))
+                    .or_else(|| ctx.con_arities.get(name.as_str()).copied())
                     .unwrap_or(0);
                 if con_arity > 0 {
                     let pa_names: Vec<String> = (0..con_arity)
@@ -2017,10 +2093,35 @@ fn emit_expr(
             // If this is a known binding in the global environment, treat it as a 0-arity call.
             // This is important for top-level PatBind values and helper bindings.
             if let Some((def_mod, _scheme)) = ctx.env.lookup(&resolved).or_else(|| ctx.env.lookup(name)) {
-                // Prefer a local 0-arity call if present.
-                if let Some(&label) = ctx.local_fns.get(&(name.clone(), 0)) {
-                    beam.emit_call(0, label);
+                // Prefer a local 0-arity call if present — but skip if it would be a
+                // self-referential call (e.g. instance member `handleCall = handleCall`).
+                let is_self_ref = name.as_str() == ctx.current_fn_name.as_str();
+                if !is_self_ref {
+                    if let Some(&label) = ctx.local_fns.get(&(name.clone(), 0)) {
+                        beam.emit_call(0, label);
+                        beam.emit_move(Reg::X(0), target);
+                        return Ok(());
+                    }
+                }
+
+                // If there is a higher-arity local function definition, emit a
+                // fun reference via erlang:make_fun/3 instead of a 0-arity call.
+                // This handles cases like `{handleCall = handleCall}` where handleCall
+                // is a multi-arg function used as a value (not applied).
+                let max_local_arity = ctx.local_fns.keys()
+                    .filter(|(n, a)| n.as_str() == name.as_str() && *a > 0)
+                    .map(|(_, a)| *a)
+                    .max();
+                if let Some(la) = max_local_arity {
+                    let mod_atom = beam.intern_atom(ctx.module_name);
+                    let fun_atom = beam.intern_atom(name);
+                    beam.emit_move_to_reg(TAG_A, mod_atom as u64, Reg::X(0));
+                    beam.emit_move_to_reg(TAG_A, fun_atom as u64, Reg::X(1));
+                    beam.emit_move_to_reg(TAG_I, la as u64, Reg::X(2));
+                    let imp_idx = beam.intern_import("erlang", "make_fun", 3);
+                    beam.emit_call_ext(3, imp_idx);
                     beam.emit_move(Reg::X(0), target);
+                    ctx.next_x = 1;
                     return Ok(());
                 }
 
@@ -2966,8 +3067,15 @@ fn emit_call(
             && !ctx.vars.contains_key(name.as_str())
         {
             // Check for partial constructor application.
-            let total_arity = ctx.env.lookup(name.as_str())
-                .map(|(_, sch)| mono_arity(&sch.ty))
+            let env_arity = ctx.env.lookup(name.as_str()).map(|(mod_, sch)| {
+                let a = mono_arity(&sch.ty);
+                if name == "Shutdown" {
+                    eprintln!("[DEBUG emit_call Shutdown] mod={} env_arity={} arity={}", mod_, a, arity);
+                }
+                a
+            });
+            let total_arity = env_arity
+                .or_else(|| ctx.con_arities.get(name.as_str()).copied())
                 .unwrap_or(arity);
 
             if arity < total_arity {

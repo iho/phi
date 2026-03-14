@@ -7,12 +7,10 @@ module Demo.Server
 
 import Prelude (Integer, Atom, pure, ($))
 import Control.Behaviour.GenServer
-  ( class GenServer
-  , HandleCall, HandleCast, Init
+  ( HandleCall, HandleCast, Init
   , startLinkWith, initOk
   , call, cast, noReply, reply, shutdown
   )
-import Control.Behaviour.GenTypes (Name)
 import Control.Process (Process)
 import Data.Pid (Pid)
 import System.IO (println)
@@ -24,10 +22,10 @@ data State = State Integer
 name :: Atom
 name = :server
 
-foreign import startServer :: Process Pid
+classDict = {handleCall = handleCall, handleCast = handleCast}
 
 start :: Process Pid
-start = startServer
+start = startLinkWith name (init 20) classDict
 
 inc :: Process ()
 inc = cast name Inc
@@ -39,10 +37,6 @@ query :: Process Integer
 query = do
   QueryResult i <- call name Query
   pure i
-
-instance GenServer Request Reply State where
-  handleCall = handleCall
-  handleCast = handleCast
 
 init :: Integer -> Init Request State
 init n = initOk (State n)

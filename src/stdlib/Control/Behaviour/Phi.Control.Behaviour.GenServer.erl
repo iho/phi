@@ -44,28 +44,28 @@
         , waitResponse/2
         ]).
 
--define(MOD, 'Control.Behaviour.GenServer.Proxy').
+-define(MOD, 'Phi.Control.Behaviour.GenServer.Proxy').
 
 %%---------------------------------------------------------------------------
 %% | Start/stop server
 %%---------------------------------------------------------------------------
 
-start(Class, Init) ->
+start(Init, Class) ->
   ?IO(retPid(gen_server:start(?MOD, [Class, Init], []))).
 
-startWith(Class, Name, Init) ->
+startWith(Name, Init, Class) ->
   ?IO(retPid(gen_server:start({local, Name}, ?MOD, [Class, Init], []))).
 
-startLink(Class, Init) ->
+startLink(Init, Class) ->
   ?IO(retPid(gen_server:start_link(?MOD, [Class, Init], []))).
 
-startLinkWith(Class, Name, Init) ->
+startLinkWith(Name, Init, Class) ->
   ?IO(retPid(gen_server:start_link({local, Name}, ?MOD, [Class, Init], []))).
 
-startMonitor(Class, Init) ->
+startMonitor(Init, Class) ->
   ?IO(retPid(gen_server:start_monitor(?MOD, [Class, Init], []))).
 
-startMonitorWith(Class, Name, Init) ->
+startMonitorWith(Name, Init, Class) ->
   ?IO(retPid(gen_server:start_monitor({local, Name}, ?MOD, [Class, Init], []))).
 
 stop(Name) ->
