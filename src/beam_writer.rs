@@ -857,9 +857,6 @@ pub fn compute_constructor_arities(modules: &[ast::Module]) -> std::collections:
             match decl {
                 ast::Decl::Data(_, _, constructors) => {
                     for ctor in constructors {
-                        if ctor.name == "Shutdown" {
-                            eprintln!("[DEBUG Shutdown] fields={}, types={:?}", ctor.fields.len(), ctor.fields.iter().map(|f| format!("{:?}", f.ty)).collect::<Vec<_>>());
-                        }
                         map.insert(ctor.name.clone(), ctor.fields.len() as u32);
                     }
                 }
@@ -3067,13 +3064,7 @@ fn emit_call(
             && !ctx.vars.contains_key(name.as_str())
         {
             // Check for partial constructor application.
-            let env_arity = ctx.env.lookup(name.as_str()).map(|(mod_, sch)| {
-                let a = mono_arity(&sch.ty);
-                if name == "Shutdown" {
-                    eprintln!("[DEBUG emit_call Shutdown] mod={} env_arity={} arity={}", mod_, a, arity);
-                }
-                a
-            });
+            let env_arity = ctx.env.lookup(name.as_str()).map(|(_, sch)| mono_arity(&sch.ty));
             let total_arity = env_arity
                 .or_else(|| ctx.con_arities.get(name.as_str()).copied())
                 .unwrap_or(arity);

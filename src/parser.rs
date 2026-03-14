@@ -509,6 +509,72 @@ fn decl_parser(
                 Decl::Instance(constraints.unwrap_or_default(), name, types, methods.unwrap_or_default(), is_else.is_some())
             });
 
+        // Atomic binder for function argument positions.
+        // Does NOT allow top-level constructor application (e.g. `Ctor arg1 arg2`);
+        // constructor patterns with arguments must be parenthesised: `(Ctor arg1 arg2)`.
+        // This prevents `f Query _from st` from being mis-parsed as `f` with one binder
+        // `Query(_from, st)` instead of three binders `Query`, `_from`, `st`.
+        let arg_binder = {
+            let var_id_a = filter_map(|span, tok| match tok {
+                Token::VarIdent(n) => Ok(n),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let proper_id_a = filter_map(|span, tok| match tok {
+                Token::ProperName(n) => Ok(n),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let num_a = filter_map(|span, tok| match tok {
+                Token::Number(n) => Ok(n),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let string_a = filter_map(|span, tok| match tok {
+                Token::String(s) => Ok(s),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let char_a = filter_map(|span, tok| match tok {
+                Token::Char(c) => Ok(c),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let atom_a = filter_map(|span, tok| match tok {
+                Token::Atom(a) => Ok(a),
+                _ => Err(Error::expected_input_found(span, Vec::new(), Some(tok))),
+            });
+            let qual_proper_a = proper_id_a.separated_by(just(Token::Dot)).at_least(1).map(|parts: Vec<String>| parts.join("."));
+
+            let atomic_b = choice((
+                var_id_a.clone().map(Binder::Var),
+                qual_proper_a.clone().map(|n| Binder::Constructor(n, vec![])),
+                just(Token::Wildcard).to(Binder::Wildcard),
+                num_a.map(Binder::Number),
+                string_a.map(Binder::String),
+                char_a.map(Binder::Char),
+                atom_a.map(Binder::Atom),
+                binder.clone()
+                    .separated_by(just(Token::Comma))
+                    .at_least(1)
+                    .delimited_by(just(Token::LeftParen), just(Token::RightParen))
+                    .map(|bs: Vec<Binder>| if bs.len() == 1 { bs[0].clone() } else { Binder::Tuple(bs) }),
+                binder.clone()
+                    .separated_by(just(Token::Comma))
+                    .then(just(Token::Pipe).ignore_then(binder.clone()).or_not())
+                    .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+                    .map(|(bs, tail): (Vec<Binder>, Option<Binder>)| {
+                        let mut res = bs;
+                        if let Some(t) = tail { res.push(t); }
+                        Binder::List(res)
+                    }),
+                just(Token::Operator("<<".to_string()))
+                    .ignore_then(binder.clone().separated_by(just(Token::Comma)))
+                    .then_ignore(just(Token::Operator(">>".to_string())))
+                    .map(Binder::Binary),
+            ));
+            let named_a = var_id_a.then_ignore(just(Token::Operator("@".to_string()))).then(atomic_b.clone()).map(|(n, b)| Binder::Named(n, Box::new(b))).or(atomic_b);
+            named_a.then(just(Token::DoubleColon).ignore_then(type_.clone()).or_not()).map(|(b, t)| match t {
+                Some(ty) => Binder::TypeAnn(Box::new(b), ty),
+                None => b,
+            })
+        };
+
         let val_guard = just(Token::Pipe)
             .ignore_then(expr.clone().separated_by(just(Token::Comma)))
             .then_ignore(just(Token::Equals))
@@ -516,7 +582,7 @@ fn decl_parser(
             .map(|(conditions, body)| ValGuard { conditions, body });
 
         let value_guarded = var_or_op.clone()
-            .then(binder.clone().repeated())
+            .then(arg_binder.clone().repeated())
             .then(val_guard.repeated().at_least(1))
             .then(just(Token::Where).ignore_then(decl.clone().separated_by(just(Token::Semicolon)).delimited_by(just(Token::LeftBrace), just(Token::RightBrace))).or_not())
             .map(|(((name, pats), guards), where_decls)| {
@@ -524,7 +590,7 @@ fn decl_parser(
             });
 
         let value = var_or_op.clone()
-            .then(binder.clone().repeated())
+            .then(arg_binder.clone().repeated())
             .then_ignore(just(Token::Equals))
             .then(expr.clone())
             .then(just(Token::Where).ignore_then(decl.clone().separated_by(just(Token::Semicolon)).delimited_by(just(Token::LeftBrace), just(Token::RightBrace))).or_not())

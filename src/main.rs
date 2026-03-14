@@ -304,29 +304,14 @@ fn main() {
     };
 
     // Prepass: compute actual BEAM arities for all modules (PatBind = 0, Value(binders) = N).
-    let beam_arities_raw = beam_writer::compute_beam_arities(&modules);
-    for key in ["Phi.Control.Monad.bind", "Phi.Control.Monad.>>=", "Phi.Data.List.replicate", "Phi.Data.List.concat"] {
-        if let Some(v) = beam_arities_raw.get(key) {
-            eprintln!("[DEBUG beam_arities] {} = {}", key, v);
-        } else {
-            eprintln!("[DEBUG beam_arities] {} = MISSING", key);
-        }
-    }
-    let beam_arities = Arc::new(beam_arities_raw);
-    let con_arities_raw = beam_writer::compute_constructor_arities(&modules);
-    for (k, v) in &con_arities_raw {
-        if matches!(k.as_str(), "Shutdown" | "Reply" | "NoReply" | "InitOk") {
-            eprintln!("[DEBUG con_arities] {}={}", k, v);
-        }
-    }
-    let con_arities = Arc::new(con_arities_raw);
+    let beam_arities = Arc::new(beam_writer::compute_beam_arities(&modules));
+    let con_arities = Arc::new(beam_writer::compute_constructor_arities(&modules));
 
     // Try direct BEAM binary generation in parallel for each module
     let beam_results: Vec<(String, Result<Vec<u8>, beam_writer::BeamGenError>)> = modules
         .par_iter()
         .map(|module| {
             let name = format!("Phi.{}", module.name);
-            println!("  [main] Target BEAM: {}.beam (module.name: {})", name, module.name);
             (name, beam_writer::generate_beam(module, &shared_env, &beam_arities, &con_arities))
         })
         .collect();
