@@ -166,13 +166,13 @@ fn binder_parser(
                 .then(just(Token::Pipe).ignore_then(binder.clone()).or_not())
                 .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
                 .map(|(bs, tail)| {
-                     let mut res = bs;
-                     if let Some(t) = tail {
-                         res.push(t);
-                         Binder::List(res)
-                     } else {
-                         Binder::List(res)
-                     }
+                    match tail {
+                        None => Binder::List(bs),
+                        // [a, b | t] → Constructor(":", [a, Constructor(":", [b, t])])
+                        Some(t) => bs.into_iter().rev().fold(
+                            t, |acc, head| Binder::Constructor(":".to_string(), vec![head, acc])
+                        ),
+                    }
                 }),
             just(Token::Operator("<<".to_string()))
                 .ignore_then(binder.clone().separated_by(just(Token::Comma)))
@@ -265,9 +265,9 @@ fn expr_parser(
                 .separated_by(just(Token::Comma))
                 .at_least(1)
                 .delimited_by(just(Token::LeftParen), just(Token::RightParen))
-                .map(|es: Vec<Expr>| if es.len() == 1 { es[0].clone() } else { Expr::Tuple(es) }),
+                .map(|es: Vec<Expr>| if es.len() == 1 { Expr::Paren(Box::new(es[0].clone())) } else { Expr::Tuple(es) }),
             expr.clone()
-                .then(just(Token::Pipe).ignore_then(comp_stmt.separated_by(just(Token::Comma))))
+                .then(just(Token::Pipe).ignore_then(comp_stmt.clone().separated_by(just(Token::Comma))))
                 .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
                 .map(|(head, stmts)| Expr::Comprehension(Box::new(head), stmts)),
             expr.clone()
@@ -338,8 +338,46 @@ fn expr_parser(
             .map(|(branches, after)| Expr::Receive(branches, after.map(|(t, b)| Box::new(AfterClause { timeout: Box::new(t), body: b }))));
 
         let high_precedence_rhs = choice((lam.clone(), if_.clone(), case.clone(), let_.clone(), do_.clone(), receive.clone()));
-        
-        let app_arg = choice((atomic.clone(), high_precedence_rhs.clone()));
+
+        // Function arguments: same as atomic but WITHOUT record literals.
+        // Record syntax `{field = value}` after an expression is always a record
+        // update (handled by `record_or_field` below), never a function argument.
+        // To pass a record literal as an argument, wrap it in parens: `f ({a = 1})`.
+        let atomic_no_record = choice((
+            qual_var_or_op.clone().map(Expr::Var),
+            qual_proper.clone().map(Expr::Var),
+            num.map(Expr::Number),
+            float.map(Expr::Float),
+            string.map(Expr::String),
+            char_ptr.map(Expr::Char),
+            atom.map(Expr::Atom),
+            just(Token::Unit).to(Expr::Unit),
+            expr.clone()
+                .separated_by(just(Token::Comma))
+                .at_least(1)
+                .delimited_by(just(Token::LeftParen), just(Token::RightParen))
+                .map(|es: Vec<Expr>| if es.len() == 1 { Expr::Paren(Box::new(es[0].clone())) } else { Expr::Tuple(es) }),
+            expr.clone()
+                .then(just(Token::Pipe).ignore_then(comp_stmt.separated_by(just(Token::Comma))))
+                .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+                .map(|(head, stmts)| Expr::Comprehension(Box::new(head), stmts)),
+            expr.clone()
+                .then_ignore(just(Token::TwoDots))
+                .then(expr.clone())
+                .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+                .map(|(start, end)| Expr::Range(Box::new(start), Box::new(end))),
+            expr.clone()
+                .separated_by(just(Token::Comma))
+                .then(just(Token::Pipe).ignore_then(expr.clone()).or_not())
+                .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+                .map(|(es, tail)| Expr::List(es, tail.map(Box::new))),
+            expr.clone()
+                .separated_by(just(Token::Comma))
+                .delimited_by(just(Token::Operator("<<".to_string())), just(Token::Operator(">>".to_string())))
+                .map(Expr::Binary),
+        ));
+
+        let app_arg = choice((atomic_no_record.clone(), high_precedence_rhs.clone()));
 
         let app = atomic.clone()
             .then(app_arg.repeated())
@@ -559,9 +597,12 @@ fn decl_parser(
                     .then(just(Token::Pipe).ignore_then(binder.clone()).or_not())
                     .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
                     .map(|(bs, tail): (Vec<Binder>, Option<Binder>)| {
-                        let mut res = bs;
-                        if let Some(t) = tail { res.push(t); }
-                        Binder::List(res)
+                        match tail {
+                            None => Binder::List(bs),
+                            Some(t) => bs.into_iter().rev().fold(
+                                t, |acc, head| Binder::Constructor(":".to_string(), vec![head, acc])
+                            ),
+                        }
                     }),
                 just(Token::Operator("<<".to_string()))
                     .ignore_then(binder.clone().separated_by(just(Token::Comma)))

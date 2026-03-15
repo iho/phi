@@ -23,6 +23,340 @@ mod asm_writer;
 mod ir;
 mod regalloc;
 
+// ---------------------------------------------------------------------------
+// Fixity resolution pass
+// ---------------------------------------------------------------------------
+
+fn collect_fixities(modules: &[ast::Module]) -> std::collections::HashMap<String, (i32, ast::Assoc)> {
+    let mut map = std::collections::HashMap::new();
+    for module in modules {
+        for decl in &module.declarations {
+            collect_fixity_from_decl(decl, &mut map);
+        }
+    }
+    map
+}
+
+fn collect_fixity_from_decl(
+    decl: &ast::Decl,
+    map: &mut std::collections::HashMap<String, (i32, ast::Assoc)>,
+) {
+    match decl {
+        ast::Decl::Infix(assoc, prec, _fun_name, op_symbol) => {
+            map.insert(op_symbol.clone(), (*prec, *assoc));
+        }
+        ast::Decl::Instance(_, _, _, decls, _) | ast::Decl::Class(_, _, _, decls, _) => {
+            for inner in decls {
+                collect_fixity_from_decl(inner, map);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Flatten a left-fold BinOp chain into alternating [Ok(expr), Err(op), Ok(expr), ...].
+/// Stops at Paren nodes — they are opaque (preserve the user's explicit grouping).
+fn flatten_binop_chain(expr: ast::Expr) -> Vec<Result<ast::Expr, String>> {
+    match expr {
+        ast::Expr::BinOp(left, op, right) => {
+            let mut parts = flatten_binop_chain(*left);
+            parts.push(Err(op));
+            parts.push(Ok(*right));
+            parts
+        }
+        // Paren is an opaque atom — do NOT recurse into it for flattening
+        other => vec![Ok(other)],
+    }
+}
+
+/// Shunting-yard algorithm: given a flat alternating sequence, produce a
+/// correctly-precedenced BinOp tree.
+fn shunting_yard(
+    parts: Vec<Result<ast::Expr, String>>,
+    op_info: &std::collections::HashMap<String, (i32, ast::Assoc)>,
+) -> ast::Expr {
+    let get_info = |op: &str| -> (i32, ast::Assoc) {
+        op_info.get(op).copied().unwrap_or((9, ast::Assoc::Left))
+    };
+
+    let mut output: Vec<ast::Expr> = Vec::new();
+    let mut op_stack: Vec<String> = Vec::new();
+
+    for part in parts {
+        match part {
+            Ok(expr) => output.push(expr),
+            Err(op) => {
+                let (op_prec, op_assoc) = get_info(&op);
+                loop {
+                    match op_stack.last() {
+                        None => break,
+                        Some(top_op) => {
+                            let (top_prec, _) = get_info(top_op);
+                            let should_reduce = match op_assoc {
+                                ast::Assoc::Left | ast::Assoc::None => top_prec >= op_prec,
+                                ast::Assoc::Right => top_prec > op_prec,
+                            };
+                            if should_reduce {
+                                let top = op_stack.pop().unwrap();
+                                let right = output.pop().unwrap();
+                                let left = output.pop().unwrap();
+                                output.push(ast::Expr::BinOp(Box::new(left), top, Box::new(right)));
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                op_stack.push(op);
+            }
+        }
+    }
+    while let Some(op) = op_stack.pop() {
+        let right = output.pop().unwrap();
+        let left = output.pop().unwrap();
+        output.push(ast::Expr::BinOp(Box::new(left), op, Box::new(right)));
+    }
+    output.pop().unwrap_or(ast::Expr::Unit)
+}
+
+fn rewrite_expr_fixity(
+    expr: ast::Expr,
+    op_info: &std::collections::HashMap<String, (i32, ast::Assoc)>,
+) -> ast::Expr {
+    match expr {
+        ast::Expr::BinOp(_, _, _) => {
+            let parts = flatten_binop_chain(expr);
+            let rewritten: Vec<Result<ast::Expr, String>> = parts
+                .into_iter()
+                .map(|p| match p {
+                    Ok(e) => Ok(rewrite_expr_fixity(e, op_info)),
+                    Err(op) => Err(op),
+                })
+                .collect();
+            shunting_yard(rewritten, op_info)
+        }
+        ast::Expr::App(f, a) => ast::Expr::App(
+            Box::new(rewrite_expr_fixity(*f, op_info)),
+            Box::new(rewrite_expr_fixity(*a, op_info)),
+        ),
+        ast::Expr::Lam(bs, body) => {
+            ast::Expr::Lam(bs, Box::new(rewrite_expr_fixity(*body, op_info)))
+        }
+        ast::Expr::If(cond, then_, else_) => ast::Expr::If(
+            Box::new(rewrite_expr_fixity(*cond, op_info)),
+            Box::new(rewrite_expr_fixity(*then_, op_info)),
+            Box::new(rewrite_expr_fixity(*else_, op_info)),
+        ),
+        ast::Expr::Let(decls, body) => ast::Expr::Let(
+            decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+            Box::new(rewrite_expr_fixity(*body, op_info)),
+        ),
+        ast::Expr::Case(exprs, branches) => ast::Expr::Case(
+            exprs
+                .into_iter()
+                .map(|e| rewrite_expr_fixity(e, op_info))
+                .collect(),
+            branches
+                .into_iter()
+                .map(|b| ast::CaseBranch {
+                    binders: b.binders,
+                    guards: b
+                        .guards
+                        .into_iter()
+                        .map(|g| rewrite_expr_fixity(g, op_info))
+                        .collect(),
+                    body: rewrite_expr_fixity(b.body, op_info),
+                })
+                .collect(),
+        ),
+        ast::Expr::Do(stmts) => ast::Expr::Do(
+            stmts
+                .into_iter()
+                .map(|s| match s {
+                    ast::DoStatement::Expr(e) => {
+                        ast::DoStatement::Expr(rewrite_expr_fixity(e, op_info))
+                    }
+                    ast::DoStatement::Bind(b, e) => {
+                        ast::DoStatement::Bind(b, rewrite_expr_fixity(e, op_info))
+                    }
+                    ast::DoStatement::Let(ds) => ast::DoStatement::Let(
+                        ds.into_iter()
+                            .map(|d| rewrite_decl_fixity(d, op_info))
+                            .collect(),
+                    ),
+                })
+                .collect(),
+        ),
+        ast::Expr::List(exprs, rest) => ast::Expr::List(
+            exprs
+                .into_iter()
+                .map(|e| rewrite_expr_fixity(e, op_info))
+                .collect(),
+            rest.map(|r| Box::new(rewrite_expr_fixity(*r, op_info))),
+        ),
+        ast::Expr::Tuple(exprs) => ast::Expr::Tuple(
+            exprs
+                .into_iter()
+                .map(|e| rewrite_expr_fixity(e, op_info))
+                .collect(),
+        ),
+        ast::Expr::Negate(e) => ast::Expr::Negate(Box::new(rewrite_expr_fixity(*e, op_info))),
+        ast::Expr::Range(lo, hi) => ast::Expr::Range(
+            Box::new(rewrite_expr_fixity(*lo, op_info)),
+            Box::new(rewrite_expr_fixity(*hi, op_info)),
+        ),
+        ast::Expr::Record(fields) => ast::Expr::Record(
+            fields
+                .into_iter()
+                .map(|(n, e)| (n, rewrite_expr_fixity(e, op_info)))
+                .collect(),
+        ),
+        ast::Expr::RecordUpdate(base, fields) => ast::Expr::RecordUpdate(
+            Box::new(rewrite_expr_fixity(*base, op_info)),
+            fields
+                .into_iter()
+                .map(|(n, e)| (n, rewrite_expr_fixity(e, op_info)))
+                .collect(),
+        ),
+        ast::Expr::FieldAccess(base, field) => {
+            ast::Expr::FieldAccess(Box::new(rewrite_expr_fixity(*base, op_info)), field)
+        }
+        ast::Expr::Comprehension(body, stmts) => ast::Expr::Comprehension(
+            Box::new(rewrite_expr_fixity(*body, op_info)),
+            stmts
+                .into_iter()
+                .map(|s| match s {
+                    ast::CompStmt::Bind(b, e) => {
+                        ast::CompStmt::Bind(b, rewrite_expr_fixity(e, op_info))
+                    }
+                    ast::CompStmt::Guard(e) => {
+                        ast::CompStmt::Guard(rewrite_expr_fixity(e, op_info))
+                    }
+                    ast::CompStmt::Let(ds) => ast::CompStmt::Let(
+                        ds.into_iter()
+                            .map(|d| rewrite_decl_fixity(d, op_info))
+                            .collect(),
+                    ),
+                })
+                .collect(),
+        ),
+        ast::Expr::TypeAnn(e, t) => {
+            ast::Expr::TypeAnn(Box::new(rewrite_expr_fixity(*e, op_info)), t)
+        }
+        ast::Expr::Paren(e) => {
+            // Recurse inside the paren but keep the Paren wrapper so flatten_binop_chain
+            // treats it as an opaque atom (preserving the user's explicit grouping).
+            ast::Expr::Paren(Box::new(rewrite_expr_fixity(*e, op_info)))
+        }
+        ast::Expr::Receive(branches, after) => ast::Expr::Receive(
+            branches
+                .into_iter()
+                .map(|b| ast::CaseBranch {
+                    binders: b.binders,
+                    guards: b
+                        .guards
+                        .into_iter()
+                        .map(|g| rewrite_expr_fixity(g, op_info))
+                        .collect(),
+                    body: rewrite_expr_fixity(b.body, op_info),
+                })
+                .collect(),
+            after.map(|a| {
+                Box::new(ast::AfterClause {
+                    timeout: Box::new(rewrite_expr_fixity(*a.timeout, op_info)),
+                    body: rewrite_expr_fixity(a.body, op_info),
+                })
+            }),
+        ),
+        ast::Expr::Binary(exprs) => ast::Expr::Binary(
+            exprs
+                .into_iter()
+                .map(|e| rewrite_expr_fixity(e, op_info))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+fn rewrite_decl_fixity(
+    decl: ast::Decl,
+    op_info: &std::collections::HashMap<String, (i32, ast::Assoc)>,
+) -> ast::Decl {
+    match decl {
+        ast::Decl::Value(name, binders, expr, where_decls) => ast::Decl::Value(
+            name,
+            binders,
+            rewrite_expr_fixity(expr, op_info),
+            where_decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+        ),
+        ast::Decl::ValueGuarded(name, binders, guards, where_decls) => ast::Decl::ValueGuarded(
+            name,
+            binders,
+            guards
+                .into_iter()
+                .map(|g| ast::ValGuard {
+                    conditions: g
+                        .conditions
+                        .into_iter()
+                        .map(|c| rewrite_expr_fixity(c, op_info))
+                        .collect(),
+                    body: rewrite_expr_fixity(g.body, op_info),
+                })
+                .collect(),
+            where_decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+        ),
+        ast::Decl::PatBind(binder, expr, where_decls) => ast::Decl::PatBind(
+            binder,
+            rewrite_expr_fixity(expr, op_info),
+            where_decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+        ),
+        ast::Decl::Instance(constraints, name, types, decls, flag) => ast::Decl::Instance(
+            constraints,
+            name,
+            types,
+            decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+            flag,
+        ),
+        ast::Decl::Class(constraints, name, vars, decls, fundeps) => ast::Decl::Class(
+            constraints,
+            name,
+            vars,
+            decls
+                .into_iter()
+                .map(|d| rewrite_decl_fixity(d, op_info))
+                .collect(),
+            fundeps,
+        ),
+        other => other,
+    }
+}
+
+fn apply_fixity_pass(modules: &mut Vec<ast::Module>) {
+    let op_info = collect_fixities(modules);
+    for module in modules.iter_mut() {
+        let decls = std::mem::take(&mut module.declarations);
+        module.declarations = decls
+            .into_iter()
+            .map(|d| rewrite_decl_fixity(d, &op_info))
+            .collect();
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let search_paths: Vec<String> = {
@@ -73,6 +407,11 @@ fn main() {
     }
 
     println!("\nSummary: {}/{} files parsed successfully.", success_count, total_count);
+
+    // -----------------------------------------------------------------------
+    // Pass 1.5: Fixity resolution — reorder BinOp trees by declared precedence
+    // -----------------------------------------------------------------------
+    apply_fixity_pass(&mut modules);
 
     // -----------------------------------------------------------------------
     // Start FFI generation early to overlap with typechecking and direct BEAM emission

@@ -108,6 +108,7 @@ pub enum Expr {
     FieldAccess(Box<Expr>, String), // NEW: expr.field
     Tuple(Vec<Expr>),
     TypeAnn(Box<Expr>, Type),
+    Paren(Box<Expr>),
     Unit,
 }
 

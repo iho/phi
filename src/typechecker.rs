@@ -499,6 +499,8 @@ pub fn infer_expr(env: &Env, state: &mut State, expr: &ast::Expr) -> Result<Mono
             let _ = unify(&t_expr, &t_ann, state);
             Ok(apply_subst(&state.subst, &t_expr))
         }
+
+        ast::Expr::Paren(inner) => infer_expr(env, state, inner),
         
         ast::Expr::Comprehension(expr, stmts) => {
             let mut env_local = env.clone();

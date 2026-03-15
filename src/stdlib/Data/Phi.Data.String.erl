@@ -30,6 +30,7 @@
         , replace/3
         , replaceFirst/3
         , replaceLast/3
+        , join/2
         , split/2
         , lines/1
         , words/1
@@ -82,10 +83,14 @@ hasSuffix(String, Suffix) ->
   end.
 
 -spec(indexOf(char(), string()) -> integer()).
-indexOf(Char, String) -> string:chr(String, Char).
+indexOf(Char, String) ->
+  List = unicode:characters_to_list(String),
+  string:chr(List, Char).
 
 -spec(lastIndexOf(char(), string()) -> integer()).
-lastIndexOf(Char, String) -> string:rchr(String, Char).
+lastIndexOf(Char, String) ->
+  List = unicode:characters_to_list(String),
+  string:rchr(List, Char).
 
 -spec(find(string(), pattern()) -> maybe_t(string())).
 find(String, Pattern) ->
@@ -113,6 +118,10 @@ replaceFirst(String, Pattern, Replacement) ->
 replaceLast(String, Pattern, Replacement) ->
   string:replace(String, Pattern, Replacement, trailing).
 
+-spec(join([string()], string()) -> string()).
+join(Parts, Sep) ->
+  iolist_to_binary(lists:join(Sep, Parts)).
+
 -spec(split(string(), Sep :: string()) -> [string()]).
 split(String, Sep) -> string:split(String, Sep, all).
 
@@ -120,7 +129,9 @@ split(String, Sep) -> string:split(String, Sep, all).
 lines(String) -> string:split(String, "\n", all).
 
 -spec(words(string()) -> [string()]).
-words(String) -> string:tokens(String, ?Whitespace ++ ?LineFeed).
+words(String) ->
+  Parts = re:split(String, <<"[\\s\\t\\n\\r]+">>),
+  [P || P <- Parts, P =/= <<>>].
 
 -spec(sliceTo(string(), pos_integer(), pos_integer()) -> string()).
 sliceTo(String, Start, End) ->
@@ -142,16 +153,20 @@ padBoth(String, Len) ->
   flat(string:pad(String, Len, both)).
 
 -spec(trimChars(string(), string()) -> string()).
-trimChars(String, Chars) -> string:trim(String, both, Chars).
+trimChars(String, Chars) -> string:trim(String, both, chars_to_list(Chars)).
 
 -spec(trimLeft(string()) -> string()).
 trimLeft(String) -> string:trim(String, leading).
 
 -spec(trimLeftChars(string(), string()) -> string()).
-trimLeftChars(String, Chars) -> string:trim(String, leading, Chars).
+trimLeftChars(String, Chars) -> string:trim(String, leading, chars_to_list(Chars)).
 
 -spec(trimRight(string()) -> string()).
 trimRight(String) -> string:trim(String, trailing).
 
 -spec(trimRightChars(string(), string()) -> string()).
-trimRightChars(String, Chars) -> string:trim(String, trailing, Chars).
+trimRightChars(String, Chars) -> string:trim(String, trailing, chars_to_list(Chars)).
+
+%% Convert a binary string to a list of grapheme clusters for string:trim/3
+chars_to_list(Chars) when is_binary(Chars) -> unicode:characters_to_list(Chars);
+chars_to_list(Chars) -> Chars.

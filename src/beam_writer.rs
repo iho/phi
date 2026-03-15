@@ -1048,8 +1048,14 @@ pub fn generate_beam(
     let mut beam = BeamModule::new(&erl_mod_name);
     let mod_atom = beam.intern_atom(&erl_mod_name);
 
+    // Collect the set of (name, arity) pairs defined at the module level (outside instances).
+    // These take priority: instance methods with the same name are skipped to avoid
+    // shadowing module-level definitions (e.g. OrdDict.append vs Semigroup.append).
+    let mut module_level_names: std::collections::HashSet<(String, u32)> = std::collections::HashSet::new();
+    collect_module_level_names(&module.declarations, &mut module_level_names);
+
     let mut all_decls = Vec::new();
-    collect_all_decls(&module.declarations, &mut all_decls);
+    collect_all_decls(&module.declarations, &mut all_decls, &module_level_names);
 
     let mut groups: Vec<(String, u32, Vec<ast::Decl>)> = Vec::new();
     for decl in all_decls {
@@ -1508,6 +1514,7 @@ fn free_vars(
         ast::Expr::FieldAccess(e, _) => free_vars(e, bound, free),
         ast::Expr::Negate(e) => free_vars(e, bound, free),
         ast::Expr::TypeAnn(e, _) => free_vars(e, bound, free),
+        ast::Expr::Paren(e) => free_vars(e, bound, free),
         ast::Expr::Range(lo, hi) => {
             free_vars(lo, bound, free);
             free_vars(hi, bound, free);
@@ -1584,7 +1591,40 @@ fn type_arity(ty: &ast::Type) -> u32 {
     }
 }
 
-fn collect_all_decls(decls: &[ast::Decl], out: &mut Vec<ast::Decl>) {
+/// Collect the (name, arity) pairs for declarations defined at the module level
+/// (i.e., NOT inside any instance or class block).
+fn collect_module_level_names(
+    decls: &[ast::Decl],
+    out: &mut std::collections::HashSet<(String, u32)>,
+) {
+    for decl in decls {
+        match decl {
+            ast::Decl::Value(n, binders, _, _) => {
+                out.insert((n.clone(), binders.len() as u32));
+            }
+            ast::Decl::ValueGuarded(n, binders, _, _) => {
+                out.insert((n.clone(), binders.len() as u32));
+            }
+            ast::Decl::PatBind(binder, _, _) => {
+                if let ast::Binder::Var(n) = binder {
+                    out.insert((n.clone(), 0));
+                }
+            }
+            ast::Decl::ForeignImport(original, local, ty) => {
+                let name = if local.is_empty() { original.clone() } else { local.clone() };
+                out.insert((name, type_arity(ty)));
+            }
+            // Intentionally skip Instance and Class — we only want module-level names.
+            _ => {}
+        }
+    }
+}
+
+fn collect_all_decls(
+    decls: &[ast::Decl],
+    out: &mut Vec<ast::Decl>,
+    module_level: &std::collections::HashSet<(String, u32)>,
+) {
     for decl in decls {
         match decl {
             ast::Decl::Value(_, _, _, where_decls) => {
@@ -1595,7 +1635,7 @@ fn collect_all_decls(decls: &[ast::Decl], out: &mut Vec<ast::Decl>) {
                     ast::Decl::ForeignImport(..) => true,
                     _ => false,
                 }).cloned().collect();
-                collect_all_decls(&fn_where, out);
+                collect_all_decls(&fn_where, out, module_level);
             }
             ast::Decl::ValueGuarded(_, _, _, where_decls) => {
                 out.push(decl.clone());
@@ -1605,20 +1645,31 @@ fn collect_all_decls(decls: &[ast::Decl], out: &mut Vec<ast::Decl>) {
                     ast::Decl::ForeignImport(..) => true,
                     _ => false,
                 }).cloned().collect();
-                collect_all_decls(&fn_where, out);
+                collect_all_decls(&fn_where, out, module_level);
             }
             ast::Decl::PatBind(_, _, where_decls) => {
                 out.push(decl.clone());
-                collect_all_decls(where_decls, out);
+                collect_all_decls(where_decls, out, module_level);
             }
             ast::Decl::ForeignImport(..) => {
                 out.push(decl.clone());
             }
             ast::Decl::Class(_, _, _, members, _) => {
-                collect_all_decls(members, out);
+                collect_all_decls(members, out, module_level);
             }
             ast::Decl::Instance(_, _, _, members, _) => {
-                collect_all_decls(members, out);
+                // Skip instance members whose (name, arity) is already defined at
+                // module level, so module-level definitions take precedence.
+                let filtered: Vec<ast::Decl> = members.iter().filter(|m| {
+                    let key = match m {
+                        ast::Decl::Value(n, b, _, _) => Some((n.clone(), b.len() as u32)),
+                        ast::Decl::ValueGuarded(n, b, _, _) => Some((n.clone(), b.len() as u32)),
+                        ast::Decl::PatBind(ast::Binder::Var(n), _, _) => Some((n.clone(), 0)),
+                        _ => None,
+                    };
+                    key.map_or(true, |k| !module_level.contains(&k))
+                }).cloned().collect();
+                collect_all_decls(&filtered, out, module_level);
             }
             _ => {}
         }
@@ -1641,8 +1692,14 @@ fn emit_pattern_check(
                 let idx = beam.intern_atom("false");
                 beam.emit_is_eq_exact(fail_label, reg, TAG_A, idx as u64);
             } else if n == "unit" {
-                let idx = beam.intern_atom("undefined");
-                beam.emit_is_eq_exact(fail_label, reg, TAG_A, idx as u64);
+                // unit = {ok}: test is_tuple + arity 1 + element 0 == ok
+                beam.emit_is_tuple(fail_label, reg);
+                beam.emit_test_arity(fail_label, reg, 1);
+                let tmp = ctx.push_y();
+                beam.emit_get_tuple_element(reg, 0, tmp);
+                let ok_idx = beam.intern_atom("ok");
+                beam.emit_is_eq_exact(fail_label, tmp, TAG_A, ok_idx as u64);
+                ctx.pop_y();
             } else {
                 ctx.vars.insert(n.clone(), reg);
             }
@@ -1959,8 +2016,13 @@ fn emit_expr(
         }
 
         ast::Expr::Unit => {
-            let idx = beam.intern_atom("undefined");
-            beam.emit_move_to_reg(TAG_A, idx as u64, target);
+            // Unit value = {ok} in Erlang (1-element tuple containing the atom `ok`).
+            let ok_atom = beam.intern_atom("ok");
+            let elem_y = ctx.push_y();
+            beam.emit_move_to_reg(TAG_A, ok_atom as u64, elem_y);
+            beam.emit_test_heap(2, ctx.next_x);
+            beam.emit_put_tuple2(1, target, &[elem_y]);
+            ctx.pop_y();
             Ok(())
         }
 
@@ -1971,8 +2033,13 @@ fn emit_expr(
                 return Ok(());
             }
             if name == "unit" {
-                let idx = beam.intern_atom("undefined");
-                beam.emit_move_to_reg(TAG_A, idx as u64, target);
+                // unit = {ok} in Erlang
+                let ok_atom = beam.intern_atom("ok");
+                let elem_y = ctx.push_y();
+                beam.emit_move_to_reg(TAG_A, ok_atom as u64, elem_y);
+                beam.emit_test_heap(2, ctx.next_x);
+                beam.emit_put_tuple2(1, target, &[elem_y]);
+                ctx.pop_y();
                 return Ok(());
             }
 
@@ -1993,11 +2060,23 @@ fn emit_expr(
                     // 0-arity PatBind value: call it to get the result, not a fun ref.
                     beam.emit_call(0, label);
                     beam.emit_move(Reg::X(0), target);
-                } else {
+                } else if arity == 1 {
                     let fun_atom = beam.intern_atom(name);
                     let fun_idx = beam.intern_fun(fun_atom, arity, label, 0);
                     let live = ctx.stack_depth; // live Y regs
                     beam.emit_make_fun3(fun_idx, live, target, &[]); // No environment for top-level
+                } else {
+                    // arity > 1: wrap in a 1-arity lambda so call_fun(1) works correctly
+                    // when this function is used as a higher-order value (e.g. Testable dispatch).
+                    let fn_expr = ast::Expr::Var(name.to_string());
+                    let wrapper = ast::Expr::Lam(
+                        vec![ast::Binder::Var("__curry_0".to_string())],
+                        Box::new(ast::Expr::App(
+                            Box::new(fn_expr),
+                            Box::new(ast::Expr::Var("__curry_0".to_string())),
+                        )),
+                    );
+                    return emit_expr(beam, &wrapper, ctx, target);
                 }
                 return Ok(());
             }
@@ -2059,7 +2138,7 @@ fn emit_expr(
                     let type_arity = mono_arity(&scheme.ty);
                     // Use BEAM arity if known and > 0, otherwise fall back to type arity.
                     let arity = beam_arity_opt.unwrap_or(type_arity);
-                    if arity > 0 {
+                    if arity == 1 {
                         let dot = resolved.rfind('.').unwrap();
                         let mod_name = &resolved[..dot];
                         let fun_name = &resolved[dot + 1..];
@@ -2080,6 +2159,17 @@ fn emit_expr(
                         beam.emit_move(Reg::X(0), target);
                         ctx.next_x = 1;
                         return Ok(());
+                    } else if arity > 1 {
+                        // Wrap in a 1-arity lambda so call_fun(1) works in higher-order contexts.
+                        let fn_expr = ast::Expr::Var(name.to_string());
+                        let wrapper = ast::Expr::Lam(
+                            vec![ast::Binder::Var("__curry_0".to_string())],
+                            Box::new(ast::Expr::App(
+                                Box::new(fn_expr),
+                                Box::new(ast::Expr::Var("__curry_0".to_string())),
+                            )),
+                        );
+                        return emit_expr(beam, &wrapper, ctx, target);
                     }
                 }
 
@@ -2110,15 +2200,28 @@ fn emit_expr(
                     .map(|(_, a)| *a)
                     .max();
                 if let Some(la) = max_local_arity {
-                    let mod_atom = beam.intern_atom(ctx.module_name);
-                    let fun_atom = beam.intern_atom(name);
-                    beam.emit_move_to_reg(TAG_A, mod_atom as u64, Reg::X(0));
-                    beam.emit_move_to_reg(TAG_A, fun_atom as u64, Reg::X(1));
-                    beam.emit_move_to_reg(TAG_I, la as u64, Reg::X(2));
-                    let imp_idx = beam.intern_import("erlang", "make_fun", 3);
-                    beam.emit_call_ext(3, imp_idx);
-                    beam.emit_move(Reg::X(0), target);
-                    ctx.next_x = 1;
+                    if la == 1 {
+                        let mod_atom = beam.intern_atom(ctx.module_name);
+                        let fun_atom = beam.intern_atom(name);
+                        beam.emit_move_to_reg(TAG_A, mod_atom as u64, Reg::X(0));
+                        beam.emit_move_to_reg(TAG_A, fun_atom as u64, Reg::X(1));
+                        beam.emit_move_to_reg(TAG_I, la as u64, Reg::X(2));
+                        let imp_idx = beam.intern_import("erlang", "make_fun", 3);
+                        beam.emit_call_ext(3, imp_idx);
+                        beam.emit_move(Reg::X(0), target);
+                        ctx.next_x = 1;
+                    } else {
+                        // la > 1: wrap in a 1-arity lambda so call_fun(1) works.
+                        let fn_expr = ast::Expr::Var(name.to_string());
+                        let wrapper = ast::Expr::Lam(
+                            vec![ast::Binder::Var("__curry_0".to_string())],
+                            Box::new(ast::Expr::App(
+                                Box::new(fn_expr),
+                                Box::new(ast::Expr::Var("__curry_0".to_string())),
+                            )),
+                        );
+                        emit_expr(beam, &wrapper, ctx, target)?;
+                    }
                     return Ok(());
                 }
 
@@ -2144,6 +2247,10 @@ fn emit_expr(
         }
 
         ast::Expr::TypeAnn(inner, _) => {
+            emit_expr(beam, inner, ctx, target)
+        }
+
+        ast::Expr::Paren(inner) => {
             emit_expr(beam, inner, ctx, target)
         }
 
@@ -2308,14 +2415,14 @@ fn emit_expr(
                 beam.emit_move(y_right, Reg::X(1));
                 beam.emit_call_ext(2, fmap_idx);
             } else if op == "<>" {
-                // Binary/String append: build [left, right] and call iolist_to_binary/1.
-                // X(0) = left, X(1) = right (already moved above).
-                beam.emit_test_heap(4, 2); // 2 cons cells, 2 live regs
-                beam.emit_make_nil(Reg::X(2));
-                beam.emit_put_list(Reg::X(1), Reg::X(2), Reg::X(1)); // X(1) = [right]
-                beam.emit_put_list(Reg::X(0), Reg::X(1), Reg::X(0)); // X(0) = [left, right]
-                let iob_idx = beam.intern_import("erlang", "iolist_to_binary", 1);
-                beam.emit_call_ext(1, iob_idx);
+                // Semigroup append: dispatch via runtime type to handle String, List,
+                // Unit, Tuple, and other semigroups correctly.
+                // X(0) = left, X(1) = right (already moved from y_left/y_right above).
+                emit_preload_module(beam, "Phi.Data.Semigroup.FFI");
+                beam.emit_move(y_left, Reg::X(0));
+                beam.emit_move(y_right, Reg::X(1));
+                let sa_idx = beam.intern_import("Phi.Data.Semigroup.FFI", "semiAppend", 2);
+                beam.emit_call_ext(2, sa_idx);
             } else {
                 // User-defined Phi operator: resolve via env aliases.
                 let resolved = ctx.env.resolve_term_alias(op);
@@ -2568,7 +2675,19 @@ fn emit_expr(
         }
 
         ast::Expr::RecordUpdate(base, updates) => {
-            // Fold maps:put/3 over the base map.
+            // If the base is a constructor name (uppercase), this is constructor
+            // application with named fields: build a fresh map from the updates
+            // and delegate to App(base, Record(updates)).
+            let base_is_constructor = matches!(base.as_ref(),
+                ast::Expr::Var(n) if n.chars().next().is_some_and(|c| c.is_uppercase()));
+
+            if base_is_constructor {
+                let record_expr = ast::Expr::Record(updates.clone());
+                let app_expr = ast::Expr::App(base.clone(), Box::new(record_expr));
+                return emit_expr(beam, &app_expr, ctx, target);
+            }
+
+            // Otherwise: update existing base map with the specified fields.
             let map_y = ctx.push_y();
             emit_expr(beam, base, ctx, map_y)?;
 
@@ -2743,12 +2862,14 @@ fn collect_app_flat<'a>(
     f: &'a ast::Expr,
     last_arg: &'a ast::Expr,
 ) -> (&'a ast::Expr, Vec<&'a ast::Expr>) {
-    if let ast::Expr::App(inner_f, inner_a) = f {
-        let (func, mut args) = collect_app_flat(inner_f, inner_a);
-        args.push(last_arg);
-        (func, args)
-    } else {
-        (f, vec![last_arg])
+    match f {
+        ast::Expr::App(inner_f, inner_a) => {
+            let (func, mut args) = collect_app_flat(inner_f, inner_a);
+            args.push(last_arg);
+            (func, args)
+        }
+        ast::Expr::Paren(inner) => collect_app_flat(inner, last_arg),
+        _ => (f, vec![last_arg]),
     }
 }
 
@@ -2801,13 +2922,11 @@ fn emit_call(
                         if n_arity == arity {
                             is_static_call = true;
                         } else if arity < n_arity {
-                            // Partial application of a local function: synthesize lambda.
+                            // Partial application of a local function: synthesize nested lambdas.
+                            // Use nested single-binder lambdas so call_fun(1) works at each step.
                             let remaining = n_arity - arity;
                             let pa_names: Vec<String> = (0..remaining)
                                 .map(|i| format!("__pa_{}", i))
-                                .collect();
-                            let pa_binders: Vec<ast::Binder> = pa_names.iter()
-                                .map(|n| ast::Binder::Var(n.clone()))
                                 .collect();
                             let mut app = func.clone();
                             for &arg in args.iter() {
@@ -2818,8 +2937,15 @@ fn emit_call(
                                     Box::new(app),
                                     Box::new(ast::Expr::Var(pa.clone())));
                             }
-                            let lambda = ast::Expr::Lam(pa_binders, Box::new(app));
-                            return emit_expr(beam, &lambda, ctx, target);
+                            // Build nested single-binder lambdas from inside out.
+                            let mut nested = app;
+                            for pa in pa_names.iter().rev() {
+                                nested = ast::Expr::Lam(
+                                    vec![ast::Binder::Var(pa.clone())],
+                                    Box::new(nested),
+                                );
+                            }
+                            return emit_expr(beam, &nested, ctx, target);
                         }
                         // arity > n_arity: falls through to the over-application handler below.
                     }
@@ -2858,7 +2984,9 @@ fn emit_call(
 
                 if let Some(beam_arity) = beam_arity_opt {
                     if beam_arity == 0 && arity > 0 {
-                        // 0-arity getter: evaluate args, call func/0 to get fun, call_fun arity
+                        // 0-arity getter: evaluate args, call func/0 to get curried fun,
+                        // then apply each arg one at a time via call_fun(1).
+                        // (Partial application synthesis now always generates nested 1-arity lambdas.)
                         let mut arg_ys = Vec::new();
                         for arg in args.iter() {
                             let y = ctx.push_y();
@@ -2876,29 +3004,29 @@ fn emit_call(
                         emit_preload_module(beam, &erl_mod);
                         let imp0 = beam.intern_import(&erl_mod, &function, 0);
                         beam.emit_call_ext(0, imp0);
-                        // X(0) = the fun; move args to X(1..arity), fun to X(arity)
+                        // X(0) = curried fun; apply each arg via call_fun(1).
                         let fun_y = ctx.push_y();
                         beam.emit_move(Reg::X(0), fun_y);
-                        for (i, &y_reg) in arg_ys.iter().enumerate() {
-                            beam.emit_move(y_reg, Reg::X(i as u32));
+                        for (i, &y_arg) in arg_ys.iter().enumerate() {
+                            beam.emit_move(y_arg, Reg::X(0)); // arg → X(0)
+                            beam.emit_move(fun_y, Reg::X(1)); // fun → X(1)
+                            beam.emit_call_fun(1);             // call_fun(1) → X(0)
+                            if i + 1 < arg_ys.len() {
+                                beam.emit_move(Reg::X(0), fun_y); // save result as next fun
+                            }
                         }
-                        beam.emit_move(fun_y, Reg::X(arity));
                         ctx.pop_y(); // fun_y
                         for _ in 0..arg_ys.len() {
                             ctx.pop_y();
                         }
-                        ctx.next_x = arity + 1;
-                        beam.emit_call_fun(arity);
+                        ctx.next_x = 1;
                         beam.emit_move(Reg::X(0), target);
                         return Ok(());
                     } else if arity < beam_arity {
-                        // Partial application: synthesize \pa_0..pa_k -> func args... pa_0..pa_k
+                        // Partial application: synthesize nested single-binder lambdas.
                         let remaining = beam_arity - arity;
                         let pa_names: Vec<String> = (0..remaining)
                             .map(|i| format!("__pa_{}", i))
-                            .collect();
-                        let pa_binders: Vec<ast::Binder> = pa_names.iter()
-                            .map(|n| ast::Binder::Var(n.clone()))
                             .collect();
                         let mut app = func.clone();
                         for &arg in args.iter() {
@@ -2909,7 +3037,14 @@ fn emit_call(
                                 Box::new(app),
                                 Box::new(ast::Expr::Var(pa.clone())));
                         }
-                        let lambda = ast::Expr::Lam(pa_binders, Box::new(app));
+                        let mut nested = app;
+                        for pa in pa_names.iter().rev() {
+                            nested = ast::Expr::Lam(
+                                vec![ast::Binder::Var(pa.clone())],
+                                Box::new(nested),
+                            );
+                        }
+                        let lambda = nested;
                         return emit_expr(beam, &lambda, ctx, target);
                     } else if arity > beam_arity {
                         // Over-application of a cross-module curried function.
@@ -2968,9 +3103,6 @@ fn emit_call(
                             let pa_names: Vec<String> = (0..remaining)
                                 .map(|i| format!("__pa_{}", i))
                                 .collect();
-                            let pa_binders: Vec<ast::Binder> = pa_names.iter()
-                                .map(|n| ast::Binder::Var(n.clone()))
-                                .collect();
                             let mut app = func.clone();
                             for &arg in args.iter() {
                                 app = ast::Expr::App(Box::new(app), Box::new((*arg).clone()));
@@ -2980,8 +3112,14 @@ fn emit_call(
                                     Box::new(app),
                                     Box::new(ast::Expr::Var(pa.clone())));
                             }
-                            let lambda = ast::Expr::Lam(pa_binders, Box::new(app));
-                            return emit_expr(beam, &lambda, ctx, target);
+                            let mut nested = app;
+                            for pa in pa_names.iter().rev() {
+                                nested = ast::Expr::Lam(
+                                    vec![ast::Binder::Var(pa.clone())],
+                                    Box::new(nested),
+                                );
+                            }
+                            return emit_expr(beam, &nested, ctx, target);
                         }
                     }
                 }
@@ -3015,11 +3153,10 @@ fn emit_call(
                 return Err(BeamGenError::Internal("non_var_partial_app"));
             }
 
-            // 3. The result fun is in X(0). Apply all rest_args at once via call_fun(n_rest).
-            //    This handles non-curried Erlang functions (e.g. randomRInt/2 returned
-            //    by a 0-arity getter) that expect all args in a single call.
+            // 3. The result fun is in X(0). Apply rest_args one at a time via call_fun(1).
+            //    Partial application synthesis now generates nested 1-arity lambdas,
+            //    so curried application is required.
             if !rest_args.is_empty() {
-                let n_rest = rest_args.len() as u32;
                 let func_y = ctx.push_y();
                 beam.emit_move(Reg::X(0), func_y);
                 let mut rest_ys = Vec::new();
@@ -3028,12 +3165,14 @@ fn emit_call(
                     emit_expr(beam, next_arg, ctx, y)?;
                     rest_ys.push(y);
                 }
-                // call_fun(n_rest): X(0..n_rest-1) = args, X(n_rest) = fun
-                for (i, &y) in rest_ys.iter().enumerate() {
-                    beam.emit_move(y, Reg::X(i as u32));
+                for (i, &y_arg) in rest_ys.iter().enumerate() {
+                    beam.emit_move(y_arg, Reg::X(0));    // arg → X(0)
+                    beam.emit_move(func_y, Reg::X(1));   // fun → X(1)
+                    beam.emit_call_fun(1);                // call_fun(1) → X(0)
+                    if i + 1 < rest_ys.len() {
+                        beam.emit_move(Reg::X(0), func_y); // save result as next fun
+                    }
                 }
-                beam.emit_move(func_y, Reg::X(n_rest));
-                beam.emit_call_fun(n_rest);
                 for _ in 0..rest_ys.len() { ctx.pop_y(); }
                 ctx.pop_y(); // func_y
             }
@@ -3058,15 +3197,24 @@ fn emit_call(
     }
 
     // Data constructor application: uppercase Var not in local scope → {Tag, arg1, ...} tuple.
+    // Also handles module-qualified constructors like `A.Size` where the last component is uppercase.
     if let ast::Expr::Var(name) = func {
-        if name.chars().next().is_some_and(|c| c.is_uppercase())
-            && !name.contains('.')
+        // For module-qualified names like "A.Size", the tag is just "Size"
+        let ctor_tag: &str = if name.contains('.') {
+            name.rsplit('.').next().unwrap_or(name.as_str())
+        } else {
+            name.as_str()
+        };
+        if ctor_tag.chars().next().is_some_and(|c| c.is_uppercase())
             && !ctx.vars.contains_key(name.as_str())
         {
             // Check for partial constructor application.
-            let env_arity = ctx.env.lookup(name.as_str()).map(|(_, sch)| mono_arity(&sch.ty));
+            let env_arity = ctx.env.lookup(name.as_str())
+                .or_else(|| ctx.env.lookup(ctor_tag))
+                .map(|(_, sch)| mono_arity(&sch.ty));
             let total_arity = env_arity
                 .or_else(|| ctx.con_arities.get(name.as_str()).copied())
+                .or_else(|| ctx.con_arities.get(ctor_tag).copied())
                 .unwrap_or(arity);
 
             if arity < total_arity {
@@ -3093,7 +3241,8 @@ fn emit_call(
             if tuple_size > 0 {
                 beam.emit_test_heap(tuple_size + 1, 0);
             }
-            let name_atom = beam.intern_atom(name);
+            // Use ctor_tag (the unqualified constructor name) for the tuple tag atom
+            let name_atom = beam.intern_atom(ctor_tag);
             let atom_y = ctx.push_y();
             beam.emit_move_to_reg(TAG_A, name_atom as u64, atom_y);
             let mut all_elems = vec![atom_y];

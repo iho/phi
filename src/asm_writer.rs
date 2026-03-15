@@ -254,6 +254,10 @@ impl<'e> AsmEmitter<'e> {
                 self.emit_expr(inner, ctx);
             }
 
+            ast::Expr::Paren(inner) => {
+                self.emit_expr(inner, ctx);
+            }
+
             // Atoms, chars, floats: encode as immediate or pointer
             ast::Expr::Atom(a) => {
                 let lbl = self.emit_string_literal(a);
@@ -1029,6 +1033,7 @@ impl IrBuilder {
                 }
             }
             ast::Expr::TypeAnn(inner, _) => self.lower(inner),
+            ast::Expr::Paren(inner) => self.lower(inner),
             ast::Expr::Negate(e) => {
                 let s = self.lower(e);
                 let v = self.fresh();

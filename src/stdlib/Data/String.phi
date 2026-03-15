@@ -105,8 +105,7 @@ foreign import replicate :: Integer -> String -> String
 -----------------------------------------------------------------------------
 -- | Join, split, take, drop and slice utf8 string
 
-join :: [String] -> String -> String
-join = ffi2 :string :join
+foreign import join :: [String] -> String -> String
 
 {- TODO:
 lexemes :: String -> String -> [String]

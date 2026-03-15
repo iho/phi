@@ -32,16 +32,16 @@ trans([X | Xs]) -> [ case X of
 end | trans(Xs) ].
 
 arrayFoldl(Fun, B0, Arr) ->
-    array:foldl(fun(I, A, B) -> ((Fun(I))(B))(A) end, B0, Arr ).
+    array:foldl(fun(I, A, B) -> erlang:apply(Fun, [I, B, A]) end, B0, Arr ).
 
 arrayFoldr(Fun, B0, Arr) ->
-    array:foldr(fun(I, A, B) -> ((Fun(I))(A))(B) end, B0, Arr ).
+    array:foldr(fun(I, A, B) -> erlang:apply(Fun, [I, A, B]) end, B0, Arr ).
 
 sparseFoldl(Fun, B0, Arr) ->
-    array:sparse_foldl(fun(I, A, B) -> ((Fun(I))(B))(A) end, B0, Arr ).
+    array:sparse_foldl(fun(I, A, B) -> erlang:apply(Fun, [I, B, A]) end, B0, Arr ).
 
 sparseFoldr(Fun, B0, Arr) ->
-    array:sparse_foldr(fun(I, A, B) -> ((Fun(I))(A))(B) end, B0, Arr ).
+    array:sparse_foldr(fun(I, A, B) -> erlang:apply(Fun, [I, A, B]) end, B0, Arr ).
 
 sparseMap(Fun, Arr) ->
-    array:sparse_map(fun(I, A) -> (Fun(I))(A) end, Arr ).
+    array:sparse_map(fun(I, A) -> erlang:apply(Fun, [I, A]) end, Arr ).

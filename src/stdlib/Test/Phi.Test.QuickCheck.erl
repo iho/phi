@@ -28,6 +28,7 @@
         , genBind/2
         , randomRIO/2
         , isIO/1
+        , pureIO/1
         , mapListImpl/2
         , indexImpl/2
         ]).
@@ -54,6 +55,9 @@ genBind(_, _) ->
 
 %% isIO(V): true if V is a 0-arity fun (an IO action), false otherwise.
 isIO(V) -> is_function(V, 0).
+
+%% pureIO(V): wrap V in an IO thunk (0-arity fun returning V).
+pureIO(V) -> fun() -> V end.
 
 %% mapListImpl(F, Xs): map F over a list using lists:map.
 mapListImpl(F, Xs) -> lists:map(F, Xs).

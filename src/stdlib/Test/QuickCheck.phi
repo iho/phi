@@ -41,6 +41,7 @@ import System.Error (catchException)
 foreign import genPure :: forall a. a -> Gen a
 foreign import genBind :: forall a b. Gen a -> (a -> Gen b) -> Gen b
 foreign import isIO :: forall a. a -> Boolean
+foreign import pureIO :: forall a. a -> IO a
 foreign import mapListImpl :: forall a b. (a -> b) -> [a] -> [b]
 foreign import indexImpl :: forall a. Integer -> [a] -> a
 
@@ -220,11 +221,11 @@ evaluate a = gen where Prop gen = property a
 forAll :: forall a b. Testable b => Gen a -> (a -> b) -> Property
 forAll gen body = Prop $
       genBind gen (\a ->
-        genBind (unsafePerformIO $ catchException (pure $ evaluate (body a)) handleExcept)
+        genBind (unsafePerformIO $ catchException (pureIO $ evaluate (body a)) handleExcept)
                 (\(Result res) -> genPure $ Result $ arg a res))
     where
       arg a res = res{arguments = [showAny a | res.arguments ]}
-      handleExcept e = pure $ genPure $ Result {arguments = [ showAny e], stamp = [], ok = Nothing }
+      handleExcept e = pureIO $ genPure $ Result {arguments = [ showAny e], stamp = [], ok = Nothing }
 
 type SpaceCounter = Integer
 
@@ -238,15 +239,15 @@ crashPipe :: String
 crashPipe = "●    "
 
 check :: forall a. Testable a => String -> Integer -> a -> SpaceCounter -> IO TestResult
-check s 0 m n = (println ((concat $ replicate (n/5) basePipe) <> "✔ " <> s) :: IO ()) >>= \_ -> pure Successed
+check s 0 m n = (println ((concat $ replicate (n/5) basePipe) <> "✔ " <> s) :: IO ()) >>= \_ -> pureIO Successed
 check s v m n = do
   i <- randomRIO 1332292274972041455 7304856964418773083
   let Gen fun = evaluate m
       Result r =  fun 15 (mkRand i)
   case r.ok of
     Just true -> check s (v-1) m n
-    Just false -> (println ((concat $ replicate (n/5) errorPipe) <> "✖ " <> s <> " -----> " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pure $ Failed s (showAny (r.arguments))
-    Nothing -> (println ((concat $ replicate (n/5) crashPipe) <> "● " <> s <> " ==> crash happened!!!  " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pure $ Crash s (showAny (r.arguments))
+    Just false -> (println ((concat $ replicate (n/5) errorPipe) <> "✖ " <> s <> " -----> " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pureIO $ Failed s (showAny (r.arguments))
+    Nothing -> (println ((concat $ replicate (n/5) crashPipe) <> "● " <> s <> " ==> crash happened!!!  " <> showAny (r.arguments)) :: IO ()) >>= \_ -> pureIO $ Crash s (showAny (r.arguments))
 
 
 quickCheck :: forall a. Testable a => String -> a -> SpaceCounter -> IO TestResult
@@ -276,10 +277,10 @@ runTestGroup n (TxG s xs) =
                    renderCrash 0 = ""
                    renderCrash i = "(crashed " <> show i <> ")"
                println ((concat $ replicate (n/5) basePipe) <> "----> ◯ " <> show total <> ", ✔ " <> show succ <> ", ✖ " <> show fail <> renderCrash crash <> ".")
-               pure res
+               pureIO res
 
 runTest :: TestGroup (Integer -> IO TestResult) -> IO ()
-runTest g = runTestGroup 0 g >>= \_ -> pure ()
+runTest g = runTestGroup 0 g >>= \_ -> pureIO ()
 
 tcount :: (Integer, Integer, Integer, Integer) -> [TestResult] -> (Integer, Integer, Integer, Integer)
 tcount (a,b,c,d) [] = (a,b,c,d)
