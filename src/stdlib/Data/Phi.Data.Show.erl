@@ -20,32 +20,37 @@
         , showNumImpl/1
         , showCharImpl/1
         , showAny/1
+        , isFloatVal/1
+        , isIntegerVal/1
+        , isListVal/1
+        , isBinaryVal/1
+        , isAtomVal/1
         ]).
 
 %% Atom -> String
--spec(showAtomImpl(any()) -> string()).
-showAtomImpl(A) when is_atom(A) -> atom_to_list(A);
-showAtomImpl(A) -> lists:flatten(io_lib:format("~p", [A])).
+-spec(showAtomImpl(any()) -> binary()).
+showAtomImpl(A) when is_atom(A) -> atom_to_binary(A, utf8);
+showAtomImpl(A) -> list_to_binary(lists:flatten(io_lib:format("~p", [A]))).
 
 %% Integer -> String
--spec(showIntImpl(integer()) -> string()).
-showIntImpl(I) -> integer_to_list(I).
+-spec(showIntImpl(integer()) -> binary()).
+showIntImpl(I) -> integer_to_binary(I).
 
 %% Float -> String
--spec(showFloatImpl(float()) -> string()).
+-spec(showFloatImpl(float()) -> binary()).
 showFloatImpl(F) ->
-  erlang:float_to_list(F, [{decimals,precision(abs(F), 0)}]).
+  list_to_binary(erlang:float_to_list(F, [{decimals,precision(abs(F), 0)}])).
 
 %% Float -> String
--spec(showNumImpl(number()) -> string()).
+-spec(showNumImpl(number()) -> binary()).
 showNumImpl(N) when is_integer(N) ->
   showIntImpl(N);
 showNumImpl(N) when is_float(N) ->
   showFloatImpl(N).
 
 %% showChar :: Char -> String
--spec(showCharImpl(char()) -> string()).
-showCharImpl(C) -> [$', C, $'].
+-spec(showCharImpl(char()) -> binary()).
+showCharImpl(C) -> list_to_binary([$', C, $']).
 
 precision(A, P) ->
   case A == trunc(A) of
@@ -53,5 +58,11 @@ precision(A, P) ->
     false -> precision(A*10.0, P+1)
   end.
 
--spec(showAny(any()) -> string()).
-showAny(A) -> lists:flatten(io_lib:format("~p", [A])).
+-spec(showAny(any()) -> binary()).
+showAny(A) -> list_to_binary(lists:flatten(io_lib:format("~p", [A]))).
+
+isFloatVal(X) -> is_float(X).
+isIntegerVal(X) -> is_integer(X).
+isListVal(X) -> is_list(X).
+isBinaryVal(X) -> is_binary(X).
+isAtomVal(X) -> is_atom(X).

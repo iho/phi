@@ -1361,6 +1361,14 @@ pub fn generate_beam(
                             if g_idx + 1 == guards.len() {
                                 // last guard branch failure should go to next clause
                                 beam.emit_label(next_guard_label);
+                                // Restore x-registers from y-registers before jumping to the
+                                // next clause. Guard evaluation calls overwrite x0 (and others)
+                                // with the guard result, but the next clause will re-save x0
+                                // into y0 via emit_move_x_to_y. Without this restore, y0 in
+                                // the next clause gets the guard result instead of the argument.
+                                for i in 0..binders.len() {
+                                    beam.emit_move_y_to_x(i as u32, i as u32);
+                                }
                                 beam.emit_jump(fail_to);
                             }
                         }
@@ -1826,20 +1834,32 @@ fn emit_pattern_check(
                 return Ok(());
             }
             
-            // 0-arg constructors are plain atoms (Nothing, True, False, etc.)
+            // Strip module qualifier: "R.Match" → "Match", "Match" → "Match"
+            let ctor_tag: &str = if name.contains('.') {
+                name.rsplit('.').next().unwrap_or(name.as_str())
+            } else {
+                name.as_str()
+            };
+
+            // 0-arg constructors are {'Tag'} 1-element tuples (consistent with FFI convention)
             if args.is_empty() {
-                let atom_idx = beam.intern_atom(name);
-                beam.emit_is_eq_exact(fail_label, reg, TAG_A, atom_idx as u64);
+                beam.emit_is_tuple(fail_label, reg);
+                beam.emit_test_arity(fail_label, reg, 1);
+                let tag_y = ctx.push_y();
+                beam.emit_get_tuple_element(reg, 0, tag_y);
+                let atom_idx = beam.intern_atom(ctor_tag);
+                beam.emit_is_eq_exact(fail_label, tag_y, TAG_A, atom_idx as u64);
+                ctx.pop_y();
                 return Ok(());
             }
 
             // Regular Phi constructors are {Atom, Args...}
             beam.emit_is_tuple(fail_label, reg);
             beam.emit_test_arity(fail_label, reg, (args.len() + 1) as u32);
-            
+
             let tag_y = ctx.push_y();
             beam.emit_get_tuple_element(reg, 0, tag_y);
-            let atom_idx = beam.intern_atom(name);
+            let atom_idx = beam.intern_atom(ctor_tag);
             beam.emit_is_eq_exact(fail_label, tag_y, TAG_A, atom_idx as u64);
 
             for (i, arg) in args.iter().enumerate() {
@@ -2106,8 +2126,13 @@ fn emit_expr(
                     let lambda = ast::Expr::Lam(pa_binders, Box::new(app));
                     return emit_expr(beam, &lambda, ctx, target);
                 }
+                // 0-arg constructors are {'Tag'} 1-element tuples (consistent with FFI convention)
+                beam.emit_test_heap(2, 0);
                 let idx = beam.intern_atom(name);
-                beam.emit_move_to_reg(TAG_A, idx as u64, target);
+                let atom_y = ctx.push_y();
+                beam.emit_move_to_reg(TAG_A, idx as u64, atom_y);
+                beam.emit_put_tuple2(1, target, &[atom_y]);
+                ctx.pop_y();
                 return Ok(());
             }
 
@@ -2390,7 +2415,8 @@ fn emit_expr(
                 "/"  => Some("div"),
                 "div" => Some("div"),
                 "rem" => Some("rem"),
-                "++" => Some("++"),
+                // "++" handled below via Phi.Data.List.FFI:append/2 for binary support
+                // "++" => Some("++"),
                 _ => None,
             };
 
@@ -2414,6 +2440,14 @@ fn emit_expr(
                 beam.emit_move(y_left, Reg::X(0));
                 beam.emit_move(y_right, Reg::X(1));
                 beam.emit_call_ext(2, fmap_idx);
+            } else if op == "++" {
+                // List/String append: route through Phi.Data.List.FFI:append/2 which
+                // handles both lists (via lists:append) and binary strings.
+                emit_preload_module(beam, "Phi.Data.List.FFI");
+                beam.emit_move(y_left, Reg::X(0));
+                beam.emit_move(y_right, Reg::X(1));
+                let app_idx = beam.intern_import("Phi.Data.List.FFI", "append", 2);
+                beam.emit_call_ext(2, app_idx);
             } else if op == "<>" {
                 // Semigroup append: dispatch via runtime type to handle String, List,
                 // Unit, Tuple, and other semigroups correctly.
@@ -2440,19 +2474,24 @@ fn emit_expr(
                     let beam_arity_opt = ctx.beam_arities.get(&fq).copied()
                         .or_else(|| ctx.beam_arities.get(&format!("Phi.{}", resolved)).copied());
                     if beam_arity_opt == Some(0) {
-                        // 0-arity getter: call func/0 → fun, then call_fun(2, left, right)
+                        // 0-arity getter returns a curried fun; apply left then right
+                        // one at a time via call_fun(1) to match curried calling convention.
                         emit_preload_module(beam, &erl_mod);
                         let imp0 = beam.intern_import(&erl_mod, fun_part, 0);
                         beam.emit_call_ext(0, imp0);
-                        // X(0) = fun; save it, then restore left/right
+                        // X(0) = curried fun; first apply left arg.
                         let fun_y = ctx.push_y();
                         beam.emit_move(Reg::X(0), fun_y);
                         beam.emit_move(y_left, Reg::X(0));
-                        beam.emit_move(y_right, Reg::X(1));
-                        beam.emit_move(fun_y, Reg::X(2));
+                        beam.emit_move(fun_y, Reg::X(1));
+                        beam.emit_call_fun(1);
+                        // X(0) = partial result; now apply right arg.
+                        beam.emit_move(Reg::X(0), fun_y);
+                        beam.emit_move(y_right, Reg::X(0));
+                        beam.emit_move(fun_y, Reg::X(1));
+                        beam.emit_call_fun(1);
                         ctx.pop_y();
-                        ctx.next_x = 3;
-                        beam.emit_call_fun(2);
+                        ctx.next_x = 1;
                     } else {
                         // Preload clobbers X(0)/X(1); re-move args from Y regs after preload.
                         emit_preload_module(beam, &erl_mod);
@@ -2525,6 +2564,16 @@ fn emit_expr(
         }
 
         ast::Expr::Lam(binders, body) => {
+            // Normalize multi-binder lambdas to nested single-binder lambdas so
+            // inline lambdas use the same curried calling convention as named functions.
+            if binders.len() > 1 {
+                let mut nested = (**body).clone();
+                for binder in binders.iter().rev() {
+                    nested = ast::Expr::Lam(vec![binder.clone()], Box::new(nested));
+                }
+                return emit_expr(beam, &nested, ctx, target);
+            }
+
             let mut free = std::collections::HashSet::new();
             let mut bound = std::collections::HashSet::new();
             for b in binders { collect_binder_names(b, &mut bound); }
@@ -3339,13 +3388,35 @@ fn emit_call(
                 beam.emit_call(arity, label);
             }
         }
-    } else {
-        // Move preserved function from Y to X[arity] for the OP_CALL_FUN instruction
+    } else if arity <= 1 {
+        // 0-arg or 1-arg dynamic call: standard call_fun path.
         if let Some(y_reg) = func_y {
             beam.emit_move(y_reg, Reg::X(arity));
             ctx.pop_y();
         }
         beam.emit_call_fun(arity);
+    } else {
+        // Multi-arg dynamic call: all closures are curried (1-arity), so apply
+        // each argument one at a time via call_fun(1).
+        // Args are now in X(0..arity-1). Re-save them to fresh Y regs,
+        // then apply one by one: arg → X(0), fun → X(1), call_fun(1).
+        let mut curried_arg_ys: Vec<Reg> = Vec::new();
+        for i in 0..arity {
+            let y = ctx.push_y();
+            beam.emit_move(Reg::X(i), y);
+            curried_arg_ys.push(y);
+        }
+        let func_yr = func_y.expect("dynamic call must have func_y");
+        for (i, &y_arg) in curried_arg_ys.iter().enumerate() {
+            beam.emit_move(y_arg, Reg::X(0));   // arg → X(0)
+            beam.emit_move(func_yr, Reg::X(1)); // fun → X(1)
+            beam.emit_call_fun(1);              // → X(0)
+            if i + 1 < arity as usize {
+                beam.emit_move(Reg::X(0), func_yr); // result becomes next fun
+            }
+        }
+        ctx.pop_y(); // func_yr
+        for _ in 0..arity { ctx.pop_y(); } // curried_arg_ys
     }
 
     // Result is in X0

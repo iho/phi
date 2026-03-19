@@ -17,6 +17,7 @@ module Data.Show
   ) where
 
 import Data.Maybe (Maybe(..))
+import Data.Either (Either(..))
 import Data.Unit (Unit)
 import Data.List ((++))
 import Data.Binary as B
@@ -25,37 +26,34 @@ import Data.Ordering (Ordering(..))
 class Show a where
   show :: a -> String
 
-instance Show Atom where
-  show = showAtomImpl
-
 instance Show Boolean where
   show true = "true"
   show false = "false"
 
-instance Show Integer where
-  show = showIntImpl
-
 instance Show Float where
-  show f = showFloatImpl f
+  show f | isFloatVal f = showFloatImpl f
+
+instance Show Integer where
+  show n | isIntegerVal n = showIntImpl n
 
 instance Show Char where
-  show c = showCharImpl c
+  show c | isIntegerVal c = showCharImpl c
 
-instance Show [Char] where
-  show x = "\"" ++ x ++ "\""
+instance Show Atom where
+  show a | isAtomVal a = showAtomImpl a
 
-else instance Show a => Show [a] where
-  show x = "[" ++ showListImpl x ++ "]"
+instance Show a => Show [a] where
+  show x | isListVal x = "[" ++ showListImpl x ++ "]"
 
 instance Show Unit where
-  show _ = "unit"
+  show unit = "unit"
 
 instance Show a => Show (Maybe a) where
   show Nothing = "Nothing"
   show (Just x) = "Just " ++ show x
 
 instance Show Binary where
-  show x = show (B.toList x)
+  show x | isBinaryVal x = show (B.toList x)
 
 instance Show Ordering where
   show LT = "LT"
@@ -68,11 +66,20 @@ foreign import showFloatImpl :: Float -> String
 foreign import showCharImpl :: Char -> String
 
 foreign import showAny :: forall a. a -> String
+foreign import isFloatVal :: forall a. a -> Boolean
+foreign import isIntegerVal :: forall a. a -> Boolean
+foreign import isListVal :: forall a. a -> Boolean
+foreign import isBinaryVal :: forall a. a -> Boolean
+foreign import isAtomVal :: forall a. a -> Boolean
 
 showListImpl :: forall a. (Show a) => [a] -> String
 showListImpl [] = ""
 showListImpl [x] = show x
 showListImpl [x | xs] = show x ++ ", " ++ showListImpl xs
+
+instance (Show a, Show b) => Show (Either a b) where
+  show (Left x) = "Left " ++ show x
+  show (Right x) = "Right " ++ show x
 
 instance (Show a, Show b) => Show (a, b) where
   show (a', b') = "(" ++ show a' ++ ", " ++ show b' ++ ")"

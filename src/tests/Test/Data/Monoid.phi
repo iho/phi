@@ -7,8 +7,8 @@ import Prelude
 import Data.Monoid (mempty)
 import Data.Ordering (Ordering(..))
 
-propList :: [Int]->Bool
-propList xs = (xs <> mempty) == (mempty <> xs) && (xs <> mempty) == xs
+propList :: Bool
+propList = let xs = [1, 2, 3, 4, 5] in (xs <> mempty) == (mempty <> xs) && (xs <> mempty) == xs
 
 propUnit :: Bool
 propUnit  = ((unit <> mempty) == (mempty <> unit)) && (unit <> mempty) == unit

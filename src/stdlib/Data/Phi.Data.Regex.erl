@@ -69,7 +69,7 @@ trans_replace([{'ReplaceRuntimeOption', X} | Xs]) ->
   [match_runtime(X) | trans_replace(Xs)].
 
 replace(Sub, RE, Rep, Opt) ->
-  re:replace(Sub, RE, Rep, [{return, list} | trans_replace(Opt)]).
+  re:replace(Sub, RE, Rep, [{return, binary} | trans_replace(Opt)]).
 
 trans_value_list([]) -> [];
 trans_value_list([{_, X} | Xs]) ->
@@ -140,5 +140,5 @@ trans_split([X | Xs]) -> [ case X of
   {'Trim'} -> trim
 end | trans_split(Xs)].
 
-split(Sub, RE, Opt) -> 
-  re:split(Sub, RE, [{return, list} | trans_split(Opt)]).
+split(Sub, RE, Opt) ->
+  re:split(Sub, RE, [{return, binary} | trans_split(Opt)]).

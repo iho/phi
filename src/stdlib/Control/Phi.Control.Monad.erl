@@ -38,13 +38,14 @@ listAppend(A, B) -> lists:append(A, B).
 -spec(bindImpl(any(), fun((A :: term()) -> B :: term())) -> any()).
 bindImpl({'Gen', M}, F) ->
     %% Gen monad bind: run generator M, pass value to F, run resulting generator.
-    {'Gen', fun(I, R) ->
-        A = M(I, R),
+    %% Gen inner functions are curried 1-arity: fun(I) -> fun(R) -> val end end.
+    {'Gen', fun(I) -> fun(R) ->
+        A = (M(I))(R),
         case F(A) of
-            {'Gen', G} -> G(I, R);
+            {'Gen', G} -> (G(I))(R);
             IOFun when is_function(IOFun, 0) -> IOFun()
         end
-    end};
+    end end};
 bindImpl(X, F) ->
     %% IO monad bind: wrap in a 0-arity fun for lazy execution.
     fun() -> case F(X()) of

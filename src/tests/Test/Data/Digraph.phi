@@ -53,9 +53,9 @@ getBaseGraph4 = do
   r1 <- G.addEdge g v1 v2 1
   r2 <- G.addEdge g v2 v1 2
   r3 <- G.addEdge g v2 v3 3
-  pure (g, getEdge r2)
-  where getEdge (Right e) = e
-        getEdge (Left _) = error "failed to create edge"
+  pure (g, case r2 of
+              Right e -> e
+              Left _ -> error "failed to create edge")
 
 propVertexID :: IO Bool
 propVertexID = do
@@ -83,7 +83,8 @@ propAllVertices = do
   pure (sort vs == [Just 1, Just 2, Just 3])
 
 extractValue :: Maybe (G.Vertex Integer, G.Vertex Integer, Integer) -> Maybe Integer
-extractValue = map (\(_, _, l) -> l)
+extractValue (Just (_, _, l)) = Just l
+extractValue _ = Nothing
 
 propAllEdges :: IO Bool
 propAllEdges = do

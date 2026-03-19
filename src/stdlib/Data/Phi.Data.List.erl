@@ -31,7 +31,8 @@
         , zipWith3/4
         ]).
 
--spec(append(list(), list()) -> list()).
+%% append/2: concatenate two lists or two binary strings.
+append(L1, L2) when is_binary(L1) -> iolist_to_binary([L1, L2]);
 append(L1, L2) -> lists:append(L1, L2).
 
 -spec(concatImpl(list()) -> any()).

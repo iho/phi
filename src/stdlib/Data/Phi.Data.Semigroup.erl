@@ -34,6 +34,10 @@ semiAppend(A, B) when is_binary(A) ->
     iolist_to_binary([A, B]);                                  %% String / Binary
 semiAppend(A, B) when is_list(A) ->
     A ++ B;                                                    %% List
+semiAppend({'LT'}, _) -> {'LT'};                               %% Ordering: LT <> _ = LT
+semiAppend({'GT'}, _) -> {'GT'};                               %% Ordering: GT <> _ = GT
+semiAppend({'EQ'}, []) -> {'EQ'};                              %% Ordering: EQ <> mempty([]) -> EQ
+semiAppend({'EQ'}, B) -> B;                                    %% Ordering: EQ <> y = y
 semiAppend({A1, B1}, {A2, B2}) ->
     {semiAppend(A1, A2), semiAppend(B1, B2)};                  %% 2-Tuple
 semiAppend(A, B) when is_map(A) ->

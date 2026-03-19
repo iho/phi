@@ -585,16 +585,23 @@ fn main() {
     // Inject implicit Prelude imports (and other stdlib functions)
     // We treat every qualified binding 'Mod.Name' as a potential alias 'Name' -> 'Mod.Name'
     // if Mod is a standard library module.
-    let stdlib_aliases: Vec<(String, String)> = current_env.bindings.keys()
+    let mut stdlib_aliases: Vec<(String, String)> = current_env.bindings.keys()
         .filter(|k| k.contains('.'))
         .map(|k| {
             let dot = k.rfind('.').unwrap();
             (k[dot+1..].to_string(), k.clone())
         })
         .collect();
-    
+
+    // Sort deterministically so that alphabetically earlier module paths come FIRST.
+    // With the `if !contains_key` guard below, the first occurrence wins, so alphabetically
+    // earlier modules take priority (e.g. "Data.List.head" beats "Data.Queue.head").
+    stdlib_aliases.sort_by(|(k1, v1), (k2, v2)| k1.cmp(k2).then(v1.cmp(v2)));
+
     for (k, v) in stdlib_aliases {
-        // Only inject if it doesn't conflict or if it's from a common module
+        // Only inject if not already set by an explicitly registered term alias (e.g. operators).
+        // For name conflicts between modules, the sort above ensures alphabetically-earlier
+        // module paths win (e.g. Data.List.head over Data.Queue.head).
         if !current_env.term_aliases.contains_key(&k) {
             current_env.term_aliases.insert(k, v);
         }

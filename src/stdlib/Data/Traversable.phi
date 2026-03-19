@@ -29,8 +29,10 @@ instance Traversable List where
   traverse = traverseDefault
   sequence = sequencListImpl
 
-mapM :: forall a b m t. Monad m => Traversable t => (a -> m b) -> t a -> m (t b) 
-mapM f l = sequence (map f l)
+foreign import mapMImpl :: forall a b. (a -> IO b) -> [a] -> IO [b]
+
+mapM :: forall a b m t. Monad m => Traversable t => (a -> m b) -> t a -> m (t b)
+mapM f l = mapMImpl f l
 
 sequencListImpl :: forall a m. Applicative m => List (m a) -> m (List a)
 sequencListImpl [] = pure []

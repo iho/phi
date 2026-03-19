@@ -6,9 +6,9 @@ import Data.Regex as R
 import Data.Result (Result(..))
 
 propCompile :: Bool
-propCompile = checkResult $ R.compile "233.*[0-9a-z](ww|qaq)" [R.Unicode, R.Newline R.Any]
-  where checkResult (Ok _) = true
-        checkResult (Error _)  = false
+propCompile = case R.compile "233.*[0-9a-z](ww|qaq)" [R.Unicode, R.Newline R.Any] of
+  Ok _ -> true
+  Error _ -> false
 
 getOk :: forall a b. Result a b -> b
 getOk (Ok p) = p
@@ -25,10 +25,12 @@ propReplace = R.replace "abcd" p "[&]" [] == "a[bc]d"
 propRun :: Bool
 propRun =  (extractResult $ R.run "ABCabcdABC" p []) == [(0, 10), (3, 4)]
   where p = getOk $ R.compile ".*(abcd).*" []
-        extractResult (R.Match m) = map extractData m
-        extractResult _ = error "Failed to extract Result"
-        extractData (R.DataIndex i) = i
-        extractData _ = error "Failed to extract Data"
+        extractResult r = case r of
+          R.Match m -> map extractData m
+          _ -> error "Failed to extract Result"
+        extractData d = case d of
+          R.DataIndex i -> i
+          _ -> error "Failed to extract Data"
 
 propSplit :: Bool
 propSplit = R.split "Erlang" p [] == ["Er", "a", "g"]
