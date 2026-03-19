@@ -316,6 +316,9 @@ struct CodeGenCtx<'a> {
     /// Constructor name → field count, from data declarations across all modules.
     /// Used as fallback when env.lookup() fails to find a constructor.
     con_arities: &'a std::collections::HashMap<String, u32>,
+    /// Variables known at compile time to hold a `Char` value (bound via char literals).
+    /// Used to dispatch `show c` → `showCharImpl c` instead of polymorphic `show`.
+    char_vars: std::collections::HashSet<String>,
 }
 
 impl<'a> CodeGenCtx<'a> {
@@ -1133,6 +1136,7 @@ pub fn generate_beam(
                 module_name: &erl_mod_name,
                 current_fn_name: item.name.clone(),
                 con_arities,
+                char_vars: std::collections::HashSet::new(),
             };
 
             // emit allocate BEFORE any pattern check: tuple binders emit
@@ -1219,6 +1223,7 @@ pub fn generate_beam(
                             module_name: &erl_mod_name,
                             current_fn_name: item.name.clone(),
                             con_arities,
+                            char_vars: std::collections::HashSet::new(),
                         };
 
                         for (i, binder) in binders.iter().enumerate() {
@@ -1277,6 +1282,7 @@ pub fn generate_beam(
                             module_name: &erl_mod_name,
                             current_fn_name: item.name.clone(),
                             con_arities,
+                            char_vars: std::collections::HashSet::new(),
                         };
 
                         if let ast::Binder::Var(_name) = binder {
@@ -1301,6 +1307,7 @@ pub fn generate_beam(
                             module_name: &erl_mod_name,
                             current_fn_name: item.name.clone(),
                             con_arities,
+                            char_vars: std::collections::HashSet::new(),
                         };
 
                         for (i, binder) in binders.iter().enumerate() {
@@ -2308,6 +2315,7 @@ fn emit_expr(
 
         ast::Expr::Let(decls, body) => {
             let old_vars = ctx.vars.clone();
+            let old_char_vars = ctx.char_vars.clone();
             let mut pushed_y = 0;
             let mut processed_fn_names = std::collections::HashSet::<String>::new();
 
@@ -2319,6 +2327,10 @@ fn emit_expr(
                             pushed_y += 1;
                             emit_expr(beam, expr, ctx, y)?;
                             ctx.vars.insert(name.clone(), y);
+                            // Track char-typed variables for type-directed show dispatch.
+                            if matches!(expr, ast::Expr::Char(_)) {
+                                ctx.char_vars.insert(name.clone());
+                            }
                         } else {
                             // Function-style let binding: collect all clauses, build a lambda
                             if processed_fn_names.contains(name.as_str()) {
@@ -2383,6 +2395,7 @@ fn emit_expr(
             emit_expr(beam, body, ctx, target)?;
 
             ctx.vars = old_vars;
+            ctx.char_vars = old_char_vars;
             for _ in 0..pushed_y {
                 ctx.pop_y();
             }
@@ -2930,6 +2943,30 @@ fn emit_call(
     target: Reg,
 ) -> Result<(), BeamGenError> {
     let arity = args.len() as u32;
+
+    // Type-directed dispatch: `show c` where `c` is a known char variable →
+    // emit `showCharImpl(c)` directly to avoid the Integer clause winning over Char.
+    if arity == 1 {
+        let is_show = match func {
+            ast::Expr::Var(n) => n == "show",
+            _ => false,
+        };
+        let char_arg = match args[0] {
+            ast::Expr::Var(n) => ctx.char_vars.contains(n.as_str()),
+            _ => false,
+        };
+        if is_show && char_arg {
+            let arg_y = ctx.push_y();
+            emit_expr(beam, args[0], ctx, arg_y)?;
+            beam.emit_move(arg_y, Reg::X(0));
+            ctx.pop_y();
+            let ffi_mod = format!("Phi.{}.FFI", "Data.Show");
+            let imp_idx = beam.intern_import(&ffi_mod, "showCharImpl", 1);
+            beam.emit_call_ext(1, imp_idx);
+            beam.emit_move(Reg::X(0), target);
+            return Ok(());
+        }
+    }
 
     let mut is_static_call = false;
     let mut native_arity = None;

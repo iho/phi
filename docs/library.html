@@ -292,7 +292,7 @@
             <!-- ─── DATA.EITHER ─────────────────────────────────────── -->
             <section id="data-either">
                 <h2>Data.Either</h2>
-                <p class="module-intro">Values with two possible types — typically errors (<code>Left</code>) or success (<code>Right</code>). Instances: <code>Functor</code>, <code>Applicative</code>, <code>Monad</code>, <code>Foldable</code>, <code>Traversable</code>, <code>Eq</code>, <code>Ord</code>, <code>Semigroup</code>.</p>
+                <p class="module-intro">Values with two possible types — typically errors (<code>Left</code>) or success (<code>Right</code>). Instances: <code>Functor</code>, <code>Applicative</code>, <code>Monad</code>, <code>Foldable</code>, <code>Traversable</code>, <code>Eq</code>, <code>Ord</code>, <code>Semigroup</code>, <code>Show</code>.</p>
                 <pre class="code-snippet" style="max-width:100%;margin:0 0 1rem">data Either a b = Left a | Right b</pre>
                 <table class="fn-table">
                     <tr><td>either</td><td>(a -&gt; c) -&gt; (b -&gt; c) -&gt; Either a b -&gt; c</td><td>Case-eliminate an Either</td></tr>
@@ -359,9 +359,9 @@
             <!-- ─── DATA.STRING ──────────────────────────────────────── -->
             <section id="data-string">
                 <h2>Data.String</h2>
-                <p class="module-intro">UTF-8 string operations backed by Erlang's <code>string</code> module. In Phi, <code>String</code> is an alias for a Unicode character list.</p>
+                <p class="module-intro">UTF-8 string operations. In Phi, <code>String</code> is a UTF-8 binary; string literals compile to <code>Binary</code> values. The <code>++</code> operator concatenates both strings and lists.</p>
                 <table class="fn-table">
-                    <tr><td>(++)</td><td>String -&gt; String -&gt; String</td><td>Concatenate</td></tr>
+                    <tr><td>(++)</td><td>String -&gt; String -&gt; String</td><td>Concatenate strings or lists</td></tr>
                     <tr><td>length</td><td>String -&gt; Integer</td><td>Character count</td></tr>
                     <tr><td>isEmpty</td><td>String -&gt; Boolean</td><td>Test if empty</td></tr>
                     <tr><td>reverse</td><td>String -&gt; String</td><td>Reverse string</td></tr>
@@ -560,9 +560,10 @@ class Eq a => Ord a where
 
 class Read a where
   read :: String -> a</pre>
+                <p class="module-intro">Built-in <code>Show</code> instances: <code>Boolean</code>, <code>Integer</code>, <code>Float</code>, <code>Char</code>, <code>Atom</code>, <code>Unit</code>, <code>Binary</code>, <code>Ordering</code>, <code>[a]</code>, <code>Maybe a</code>, <code>Either a b</code>, <code>(a, b)</code>.</p>
                 <table class="fn-table">
                     <tr><td>show</td><td>Show a =&gt; a -&gt; String</td><td>Convert value to string</td></tr>
-                    <tr><td>showAny</td><td>a -&gt; String</td><td>Show without constraint</td></tr>
+                    <tr><td>showAny</td><td>a -&gt; String</td><td>Show any value without constraint (uses Erlang term format)</td></tr>
                     <tr><td>read</td><td>Read a =&gt; String -&gt; a</td><td>Parse value from string</td></tr>
                 </table>
             </section>
